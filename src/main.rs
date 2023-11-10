@@ -60,6 +60,7 @@ async fn main(
 }
 
 async fn init_db(db_pool: PgPool) -> anyhow::Result<(Arc<PgPool>, PostgresStore)> {
+    // TODO: figure out why this stopped working ...
     // sqlx::migrate!().run(&db_pool).await?;
 
     let session_store = PostgresStore::new(db_pool.clone());
