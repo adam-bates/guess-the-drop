@@ -16,7 +16,7 @@ use shuttle_secrets::SecretStore;
 use sqlx::PgPool;
 use tower::ServiceBuilder;
 use tower_http::services::{ServeDir, ServeFile};
-use tower_sessions::{Expiry, PostgresStore, Session, SessionManagerLayer};
+use tower_sessions::{cookie::SameSite, Expiry, PostgresStore, Session, SessionManagerLayer};
 use twitch_irc::{
     login::StaticLoginCredentials, ClientConfig, SecureTCPTransport, TwitchIRCClient,
 };
@@ -27,7 +27,17 @@ async fn main(
     #[shuttle_secrets::Secrets] secret_store: SecretStore,
     #[shuttle_shared_db::Postgres] db_pool: PgPool,
 ) -> shuttle_axum::ShuttleAxum {
-    let (db_pool, session_store) = init_db(db_pool).await.unwrap();
+    let config = build_config(secret_store);
+
+    sqlx::migrate!().run(&db_pool).await.unwrap();
+
+    let session_store = PostgresStore::new(db_pool.clone());
+    session_store.migrate().await.unwrap();
+
+    let state = AppState {
+        config: Arc::new(config),
+        db_pool,
+    };
 
     let session_service = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(|_| async {
@@ -35,11 +45,11 @@ async fn main(
         }))
         .layer(
             SessionManagerLayer::new(session_store)
+                .with_domain("localhost".to_string())
+                .with_expiry(Expiry::OnSessionEnd)
                 .with_secure(false)
-                .with_expiry(Expiry::OnSessionEnd),
+                .with_same_site(SameSite::Lax),
         );
-
-    let state = build_app_state(secret_store, db_pool);
 
     let router = Router::new();
 
@@ -59,44 +69,53 @@ async fn main(
     return Ok(router.into());
 }
 
-async fn init_db(db_pool: PgPool) -> anyhow::Result<(Arc<PgPool>, PostgresStore)> {
-    sqlx::migrate!().run(&db_pool).await?;
-
-    let session_store = PostgresStore::new(db_pool.clone());
-    session_store.migrate().await?;
-
-    return Ok((Arc::new(db_pool), session_store));
-}
-
 #[derive(Clone)]
 struct AppState {
     config: Arc<Config>,
-    db_pool: Arc<PgPool>,
+    db_pool: PgPool,
 }
 
 struct Config {
-    server_host: String,
+    server_protocol: String,
+    server_domain: String,
+    server_port: String,
+    server_host_uri: String,
 
     twitch_client_id: ClientId,
     twitch_client_secret: ClientSecret,
     twitch_callback_url: Url,
 }
 
-fn build_app_state(secret_store: SecretStore, db_pool: Arc<PgPool>) -> AppState {
-    let server_host = secret_store.get("SERVER_HOST").unwrap();
+fn build_config(secret_store: SecretStore) -> Config {
+    let server_protocol = secret_store.get("SERVER_PROTOCOL").unwrap();
+    let server_domain = secret_store.get("SERVER_DOMAIN").unwrap();
+    let server_port = secret_store.get("SERVER_PORT").unwrap();
 
-    let twitch_callback_url = format!("{server_host}/twitch/callback").parse().unwrap();
+    let server_port_postfix = if &server_port == "" {
+        "".to_string()
+    } else {
+        format!(":{server_port}")
+    };
 
-    let config = Arc::new(Config {
-        server_host,
+    let server_host_uri = format!("{server_protocol}://{server_domain}{server_port_postfix}")
+        .parse()
+        .unwrap();
+
+    let twitch_callback_url = format!("{server_host_uri}/twitch/callback")
+        .parse()
+        .unwrap();
+
+    return Config {
+        server_protocol,
+        server_domain,
+        server_port,
+        server_host_uri,
 
         twitch_client_id: secret_store.get("TWITCH_CLIENT_ID").unwrap().into(),
         twitch_client_secret: secret_store.get("TWITCH_CLIENT_SECRET").unwrap().into(),
 
         twitch_callback_url,
-    });
-
-    return AppState { config, db_pool };
+    };
 }
 
 #[derive(Template)]
@@ -117,8 +136,7 @@ async fn twitch_connect(session: Session, State(state): State<AppState>) -> impl
 
     let (url, csrf_token) = twitch_client.generate_url();
 
-    let session_id = format!("sid{}", nanoid!(16, &nanoid::alphabet::SAFE));
-    session.insert("sid", session_id.clone()).unwrap();
+    let session_id = session.id().0.to_string();
 
     let now_s = SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -132,7 +150,7 @@ async fn twitch_connect(session: Session, State(state): State<AppState>) -> impl
         .bind(&session_id)
         .bind(csrf_token.secret())
         .bind(ttl_s as i64)
-        .execute(&*state.db_pool)
+        .execute(&state.db_pool)
         .await
         .unwrap();
 
@@ -184,11 +202,7 @@ async fn twitch_callback(
         }
     };
 
-    let session_id = session.get::<String>("sid").unwrap();
-
-    let Some(session_id) = session_id else {
-        return (StatusCode::BAD_REQUEST, format!("Error: No session ID"));
-    };
+    let session_id = session.id().0.to_string();
 
     let now_s = SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -199,13 +213,11 @@ async fn twitch_callback(
         sqlx::query_as("SELECT * FROM csrf_tokens WHERE sid = $1 AND ttl > $2")
             .bind(&session_id)
             .bind(now_s as i64)
-            .fetch_one(&*state.db_pool)
+            .fetch_one(&state.db_pool)
             .await
             .unwrap();
 
     dbg!(&session_id, &csrf_token.token, &now_s);
-
-    todo!();
 
     let http_client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
@@ -228,7 +240,7 @@ async fn twitch_callback(
         .await
         .unwrap();
 
-    dbg!(&token, token.access_token.to_string());
+    dbg!(&token, token.access_token.secret());
 
     let client_config = ClientConfig::new_simple(StaticLoginCredentials::new(
         token.login.to_string(),
