@@ -1,20 +1,26 @@
-{% extends "empty-base.html" %}
+{% extends "base.html" %}
+
+{% block navbar_join_game %}
+{% endblock %}
 
 {% block content %}
     <div class="hero min-h-screen bg-base-200">
       <div class="hero-content text-center">
         <div class="max-w-md">
-          <h1 class="text-5xl font-bold">Hello there</h1>
+          <h1 class="text-5xl font-bold">Ready to guess the drop?</h1>
 
-          <p class="py-6">
-            Provident cupiditate voluptatem et in. Quaerat fugiat ut assumenda excepturi exercitationem quasi. In deleniti eaque aut repudiandae et a id nisi.
-          </p>
+          <div class="py-6">
+            <p class="py-1">
+              Join a game here, or
+            </p>
+            <p class="py-1">
+              <a href="/twitch/connect" class="link link-secondary">connect your twitch account</a> to start a new game.
+            </p>
+          </div>
 
-          <a href="/twitch/connect" class="btn btn-primary">Connect to Twitch</a>
-
-          <form action="/join" method="get">
-            <input type="text" name="code" placeholder="Game Code" class="input" />
-            <button type="submit" class="btn btn-primary">Join Game</button>
+          <form action="/join" method="get" class="join">
+            <button type="submit" class="btn btn-primary normal-case join-item">Join</button>
+            <input type="text" name="code" class="input input-bordered join-item" placeholder="Game Code"/>
           </form>
         </div>
       </div>
