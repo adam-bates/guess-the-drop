@@ -20,7 +20,7 @@ tokio = "1.28.2"
 tokio-stream = { version = "0.1.14", features = ["sync"] }
 tower = "0.4.13"
 tower-http = { version = "0.4.4", features = ["fs"] }
-tower-sessions = { version = "0.4.1", features = ["postgres-store"] }
+tower-sessions = { version = "0.4.1", features = ["postgres-store", "moka-store"] }
 tracing = "0.1.40"
 twitch-irc = "5.0.1"
 twitch_oauth2 = { version = "0.12.7", features = ["client", "reqwest"] }

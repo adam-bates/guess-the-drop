@@ -3,20 +3,22 @@ use std::{sync::Arc, time::SystemTime};
 use askama::Template;
 use axum::{
     error_handling::HandleErrorLayer,
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{self, IntoResponse},
-    routing::get,
-    Router,
+    routing::{get, post},
+    Form, Router,
 };
-use nanoid::nanoid;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use shuttle_secrets::SecretStore;
 use sqlx::PgPool;
 use tower::ServiceBuilder;
 use tower_http::services::{ServeDir, ServeFile};
-use tower_sessions::{cookie::SameSite, Expiry, PostgresStore, Session, SessionManagerLayer};
+use tower_sessions::{
+    cookie::SameSite, CachingSessionStore, Expiry, MokaStore, PostgresStore, Session,
+    SessionManagerLayer,
+};
 use twitch_irc::{
     login::StaticLoginCredentials, ClientConfig, SecureTCPTransport, TwitchIRCClient,
 };
@@ -31,8 +33,11 @@ async fn main(
 
     sqlx::migrate!().run(&db_pool).await.unwrap();
 
-    let session_store = PostgresStore::new(db_pool.clone());
-    session_store.migrate().await.unwrap();
+    let db_session_store = PostgresStore::new(db_pool.clone());
+    db_session_store.migrate().await.unwrap();
+
+    let mem_session_store = MokaStore::new(Some(2000));
+    let session_store = CachingSessionStore::new(mem_session_store, db_session_store);
 
     let state = AppState {
         config: Arc::new(config),
@@ -45,7 +50,7 @@ async fn main(
         }))
         .layer(
             SessionManagerLayer::new(session_store)
-                .with_domain("localhost".to_string())
+                .with_domain(state.config.server_domain.to_string())
                 .with_expiry(Expiry::OnSessionEnd)
                 .with_secure(false)
                 .with_same_site(SameSite::Lax),
@@ -56,6 +61,8 @@ async fn main(
     // dynamic paths
     let router = router
         .route("/", get(index))
+        .route("/join", get(join))
+        .route("/games/:game_code", get(game))
         .route("/twitch/connect", get(twitch_connect))
         .route("/twitch/callback", get(twitch_callback));
 
@@ -97,9 +104,7 @@ fn build_config(secret_store: SecretStore) -> Config {
         format!(":{server_port}")
     };
 
-    let server_host_uri = format!("{server_protocol}://{server_domain}{server_port_postfix}")
-        .parse()
-        .unwrap();
+    let server_host_uri = format!("{server_protocol}://{server_domain}{server_port_postfix}");
 
     let twitch_callback_url = format!("{server_host_uri}/twitch/callback")
         .parse()
@@ -126,6 +131,37 @@ async fn index() -> impl IntoResponse {
     return IndexTemplate {};
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct JoinParams {
+    code: String,
+}
+
+#[derive(Template)]
+#[template(path = "join.html")]
+struct JoinTemplate {
+    game_code: String,
+}
+
+async fn join(Query(params): Query<JoinParams>) -> impl IntoResponse {
+    return JoinTemplate {
+        game_code: params.code,
+    };
+}
+
+#[derive(Template)]
+#[template(path = "game.html")]
+struct GameTemplate {
+    game_code: String,
+    twitch_name: String,
+}
+
+async fn game(Path(game_code): Path<String>) -> impl IntoResponse {
+    return GameTemplate {
+        game_code,
+        twitch_name: "todo".to_string(),
+    };
+}
+
 async fn twitch_connect(session: Session, State(state): State<AppState>) -> impl IntoResponse {
     let mut twitch_client = UserTokenBuilder::new(
         state.config.twitch_client_id.clone(),
@@ -143,8 +179,6 @@ async fn twitch_connect(session: Session, State(state): State<AppState>) -> impl
         .unwrap()
         .as_secs();
     let ttl_s = now_s + (10 * 60); // 10 mins
-
-    dbg!(&session_id, &csrf_token.secret(), &ttl_s);
 
     sqlx::query("INSERT INTO csrf_tokens (sid, token, ttl) VALUES ($1, $2, $3)")
         .bind(&session_id)
@@ -209,15 +243,20 @@ async fn twitch_callback(
         .unwrap()
         .as_secs();
 
-    let csrf_token: CsrfToken =
-        sqlx::query_as("SELECT * FROM csrf_tokens WHERE sid = $1 AND ttl > $2")
+    let csrf_token: Option<CsrfToken> =
+        sqlx::query_as("DELETE FROM csrf_tokens WHERE sid = $1 AND ttl > $2 RETURNING *")
             .bind(&session_id)
             .bind(now_s as i64)
-            .fetch_one(&state.db_pool)
+            .fetch_optional(&state.db_pool)
             .await
             .unwrap();
 
-    dbg!(&session_id, &csrf_token.token, &now_s);
+    let Some(csrf_token) = csrf_token else {
+        return (
+            StatusCode::BAD_REQUEST,
+            "No valid tokens for session".to_string(),
+        );
+    };
 
     let http_client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
@@ -239,8 +278,6 @@ async fn twitch_callback(
         .get_user_token(&http_client, twitch_state, code)
         .await
         .unwrap();
-
-    dbg!(&token, token.access_token.secret());
 
     let client_config = ClientConfig::new_simple(StaticLoginCredentials::new(
         token.login.to_string(),
