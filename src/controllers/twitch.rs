@@ -1,7 +1,8 @@
-use crate::{AppState, Result};
+use crate::{models::CsrfToken, AppState, Result};
 
 use std::time::SystemTime;
 
+use askama_axum::Response;
 use axum::{
     extract::{Query, State},
     http::StatusCode,
@@ -9,17 +10,15 @@ use axum::{
     routing::get,
     Router,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tower_sessions::Session;
-use twitch_irc::{
-    login::StaticLoginCredentials, ClientConfig, SecureTCPTransport, TwitchIRCClient,
-};
-use twitch_oauth2::{Scope, UserTokenBuilder};
+use twitch_oauth2::{Scope, TwitchToken, UserTokenBuilder};
 
 pub fn add_routes(router: Router<AppState>) -> Router<AppState> {
     return router
         .route("/twitch/connect", get(twitch_connect))
-        .route("/twitch/callback", get(twitch_callback));
+        .route("/twitch/callback", get(twitch_callback))
+        .route("/logout", get(logout));
 }
 
 async fn twitch_connect(
@@ -31,11 +30,13 @@ async fn twitch_connect(
         state.cfg.twitch_client_secret.clone(),
         state.cfg.twitch_callback_url.clone(),
     )
+    // .force_verify(true)
     .set_scopes(vec![Scope::ChatRead, Scope::ChatEdit]);
 
     let (url, csrf_token) = twitch_client.generate_url();
 
     let session_id = session.id().0.to_string();
+    session.insert("sid", session_id.clone())?;
 
     let now_s = SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
@@ -52,27 +53,6 @@ async fn twitch_connect(
     return Ok(response::Redirect::to(url.as_str()));
 }
 
-#[derive(sqlx::FromRow, Serialize, Deserialize)]
-struct CsrfToken {
-    id: i32,
-    sid: String,
-    token: String,
-    expiry: i64,
-}
-
-#[derive(sqlx::FromRow, Serialize, Deserialize)]
-struct SessionAuth {
-    // For all
-    id: i32,
-    sid: String,
-    username: String,
-
-    // Only if authed with Twitch
-    access_token: Option<String>,
-    refresh_token: Option<String>,
-    expiry: Option<i64>,
-}
-
 #[derive(Deserialize)]
 struct AuthCallbackParams {
     code: Option<String>,
@@ -86,7 +66,7 @@ async fn twitch_callback(
     params: Query<AuthCallbackParams>,
     session: Session,
     State(state): State<AppState>,
-) -> Result<impl IntoResponse> {
+) -> Result<Response> {
     if let Some(err) = &params.error {
         return Ok((
             StatusCode::BAD_REQUEST,
@@ -97,7 +77,8 @@ async fn twitch_callback(
                     .as_ref()
                     .unwrap_or(&"unknown".to_string()),
             ),
-        ));
+        )
+            .into_response());
     }
 
     let (code, twitch_state) = match (&params.code, &params.state) {
@@ -106,11 +87,14 @@ async fn twitch_callback(
             return Ok((
                 StatusCode::BAD_REQUEST,
                 "Invalid request: missing required params".to_string(),
-            ));
+            )
+                .into_response());
         }
     };
 
-    let session_id = session.id().0.to_string();
+    let session_id = session
+        .get("sid")?
+        .unwrap_or_else(|| session.id().0.to_string());
 
     let now_s = SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
@@ -127,7 +111,8 @@ async fn twitch_callback(
         return Ok((
             StatusCode::BAD_REQUEST,
             "No valid tokens for session".to_string(),
-        ));
+        )
+            .into_response());
     };
 
     let http_client = reqwest::Client::builder()
@@ -149,18 +134,53 @@ async fn twitch_callback(
         .get_user_token(&http_client, twitch_state, code)
         .await?;
 
-    let client_config = ClientConfig::new_simple(StaticLoginCredentials::new(
-        token.login.to_string(),
-        Some(token.access_token.into()),
-    ));
+    let now_s = SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_secs();
 
-    let (_rx, client) = TwitchIRCClient::<SecureTCPTransport, _>::new(client_config);
+    let expiry_s = now_s + token.expires_in().as_secs();
 
-    client.join(token.login.to_string())?;
+    // TODO: Try to remove old session
 
-    client
-        .say(token.login.to_string(), "hello world".to_string())
+    sqlx::query("DELETE FROM session_auths WHERE sid = $1")
+        .bind(&session_id)
+        .execute(&state.db)
         .await?;
 
-    return Ok((StatusCode::OK, format!("OK")));
+    sqlx::query("INSERT INTO session_auths (sid, username, access_token, refresh_token, expiry) VALUES ($1, $2, $3, $4, $5)")
+        .bind(&session_id)
+        .bind(token.login.as_str())
+        .bind(&token.access_token.secret())
+        .bind(&token.refresh_token.as_ref().map(|t| t.secret()).unwrap_or_default())
+        .bind(expiry_s as i64)
+        .execute(&state.db)
+        .await?;
+
+    return Ok(response::Redirect::to("/").into_response());
+
+    // let client_config = ClientConfig::new_simple(StaticLoginCredentials::new(
+    //     token.login.to_string(),
+    //     Some(token.access_token.into()),
+    // ));
+
+    // let (_rx, client) = TwitchIRCClient::<SecureTCPTransport, _>::new(client_config);
+
+    // client.join(token.login.to_string())?;
+
+    // client
+    //     .say(token.login.to_string(), "hello world".to_string())
+    //     .await?;
+
+    // return Ok((StatusCode::OK, format!("OK")));
+}
+
+async fn logout(session: Session, State(state): State<AppState>) -> Result<impl IntoResponse> {
+    let session_id = session.id().0.to_string();
+
+    sqlx::query("DELETE FROM session_auths WHERE sid = $1")
+        .bind(&session_id)
+        .execute(&state.db)
+        .await?;
+
+    return Ok(response::Redirect::to("/"));
 }

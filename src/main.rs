@@ -1,5 +1,6 @@
 mod config;
 mod controllers;
+mod models;
 mod result;
 mod sessions;
 
@@ -42,6 +43,8 @@ async fn run(secrets: SecretStore, db: PgPool) -> Result<AxumService> {
         cfg: Arc::new(cfg),
         db,
     };
+
+    // TODO: Background job to clean up expired db & session records
 
     let session_service = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(|_| async {
