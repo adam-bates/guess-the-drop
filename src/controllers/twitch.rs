@@ -23,10 +23,24 @@ pub fn add_routes(router: Router<AppState>) -> Router<AppState> {
         .route("/logout", get(logout));
 }
 
+#[derive(Deserialize)]
+struct TwitchConnectParams {
+    redirect: Option<String>,
+}
+
 async fn twitch_connect(
+    params: Query<TwitchConnectParams>,
     session: Session,
     State(state): State<AppState>,
-) -> Result<impl IntoResponse> {
+) -> Result<Response> {
+    if params
+        .redirect
+        .as_ref()
+        .is_some_and(|r| !r.starts_with("/"))
+    {
+        return Ok((StatusCode::BAD_REQUEST, "Invalid redirect value").into_response());
+    }
+
     let mut twitch_client = UserTokenBuilder::new(
         state.cfg.twitch_client_id.clone(),
         state.cfg.twitch_client_secret.clone(),
@@ -46,14 +60,17 @@ async fn twitch_connect(
         .as_secs();
     let ttl_s = now_s + 3600; // + 1 hour
 
-    sqlx::query("INSERT INTO csrf_tokens (sid, token, expiry) VALUES ($1, $2, $3)")
+    let redirect = params.0.redirect.unwrap_or("/".to_string());
+
+    sqlx::query("INSERT INTO csrf_tokens (sid, token, expiry, redirect) VALUES ($1, $2, $3, $4)")
         .bind(&session_id)
         .bind(csrf_token.secret())
         .bind(ttl_s as i64)
+        .bind(redirect)
         .execute(&state.db)
         .await?;
 
-    return Ok(response::Redirect::to(url.as_str()));
+    return Ok(response::Redirect::to(url.as_str()).into_response());
 }
 
 #[derive(Deserialize)]
@@ -155,7 +172,9 @@ async fn twitch_callback(
         .execute(&state.db)
         .await?;
 
-    return Ok(response::Redirect::to("/").into_response());
+    let redirect = csrf_token.redirect.unwrap_or("/".to_string());
+
+    return Ok(response::Redirect::to(&redirect).into_response());
 
     // let client_config = ClientConfig::new_simple(StaticLoginCredentials::new(
     //     token.login.to_string(),

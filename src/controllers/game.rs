@@ -77,14 +77,14 @@ async fn game(
             .await?;
 
     if let Some(user) = user {
-        let now_s = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        // let now_s = SystemTime::now()
+        //     .duration_since(SystemTime::UNIX_EPOCH)
+        //     .unwrap()
+        //     .as_secs();
 
-        if user.expiry as u64 > now_s {
-            return Ok(GameTemplate { game_code, user }.into_response());
-        }
+        // if user.expiry as u64 > now_s {
+        return Ok(GameTemplate { game_code, user }.into_response());
+        // }
     }
 
     return Ok(Redirect::to(&format!("/join?code={game_code}")).into_response());

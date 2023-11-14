@@ -7,4 +7,5 @@ pub struct CsrfToken {
     pub sid: String,
     pub token: String,
     pub expiry: i64,
+    pub redirect: Option<String>,
 }
