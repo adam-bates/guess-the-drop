@@ -4,6 +4,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
+#[derive(Debug)]
 pub struct AppError(pub anyhow::Error);
 
 pub type Result<T = ()> = anyhow::Result<T, AppError>;

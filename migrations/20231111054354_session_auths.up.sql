@@ -1,12 +1,11 @@
 CREATE TABLE IF NOT EXISTS session_auths (
 	id SERIAL PRIMARY KEY,
-	sid TEXT NOT NULL,
-    username TEXT NOT NULL,
-    access_token TEXT NOT NULL,
-    refresh_token TEXT NOT NULL,
-	expiry INT8 NOT NULL
+	sid VARCHAR(128) NOT NULL,
+    username VARCHAR(64) NOT NULL,
+    access_token VARCHAR(1024) NOT NULL,
+    refresh_token VARCHAR(1024) NOT NULL,
+	expiry BIGINT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_session_auths_sid
-ON session_auths(sid);
+CREATE INDEX idx_session_auths_sid ON session_auths(sid);
 

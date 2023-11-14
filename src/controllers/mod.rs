@@ -2,9 +2,7 @@ mod game;
 mod twitch;
 mod utils;
 
-use std::time::SystemTime;
-
-use crate::{models::SessionAuth, AppState, Result};
+use crate::{models::SessionAuth, prelude::*};
 
 use askama::Template;
 use axum::{extract::State, response::IntoResponse, routing::get, Router};
@@ -27,7 +25,7 @@ async fn index(session: Session, State(state): State<AppState>) -> Result<impl I
     let session_id = utils::session_id(&session)?;
 
     let user: Option<SessionAuth> =
-        sqlx::query_as("SELECT * FROM session_auths WHERE sid = $1 LIMIT 1")
+        sqlx::query_as("SELECT * FROM session_auths WHERE sid = ? LIMIT 1")
             .bind(&session_id)
             .fetch_optional(&state.db)
             .await?;

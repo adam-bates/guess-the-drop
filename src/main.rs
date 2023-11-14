@@ -4,15 +4,13 @@ mod models;
 mod result;
 mod sessions;
 
-pub use crate::result::Result;
+use prelude::*;
 
 use std::{sync::Arc, time::Duration};
 
-use axum::{error_handling::HandleErrorLayer, http::StatusCode, Router};
+use axum::{error_handling::HandleErrorLayer, http::StatusCode, Router, Server};
 use reqwest::Method;
-use shuttle_axum::AxumService;
-use shuttle_secrets::SecretStore;
-use sqlx::PgPool;
+use sqlx::MySqlPool;
 use tower::ServiceBuilder;
 use tower_http::{
     compression::CompressionLayer,
@@ -22,28 +20,29 @@ use tower_http::{
 };
 use tower_sessions::{cookie::SameSite, Expiry, SessionManagerLayer};
 
+pub mod prelude {
+    pub use crate::config::Config;
+    pub use crate::result::Result;
+
+    pub use crate::AppState;
+}
+
 #[derive(Clone)]
 pub struct AppState {
-    cfg: Arc<config::Config>,
-    db: PgPool,
+    cfg: Arc<Config>,
+    db: MySqlPool,
 }
 
-#[shuttle_runtime::main]
-async fn main(
-    #[shuttle_secrets::Secrets] secrets: SecretStore,
-    #[shuttle_shared_db::Postgres] db: PgPool,
-) -> shuttle_axum::ShuttleAxum {
-    return run(secrets, db)
-        .await
-        .map_err(|e| shuttle_runtime::Error::Custom(e.0));
-}
+#[tokio::main]
+async fn main() -> Result {
+    let cfg = config::load()?;
 
-async fn run(secrets: SecretStore, db: PgPool) -> Result<AxumService> {
-    let cfg = config::build(secrets);
-
+    let db = MySqlPool::connect(&cfg.db_connection_url).await?;
     sqlx::migrate!().run(&db).await?;
 
-    let session_store = sessions::store::build(db.clone()).await?;
+    let session_store = sessions::store::build(&cfg, db.clone()).await?;
+
+    let addr = format!("0.0.0.0:{}", cfg.server_port.unwrap()).parse()?;
 
     let state = AppState {
         cfg: Arc::new(cfg),
@@ -85,5 +84,9 @@ async fn run(secrets: SecretStore, db: PgPool) -> Result<AxumService> {
         .layer(CompressionLayer::new())
         .layer(TimeoutLayer::new(Duration::from_secs(30)));
 
-    return Ok(router.into());
+    Server::bind(&addr)
+        .serve(router.into_make_service())
+        .await?;
+
+    return Ok(());
 }

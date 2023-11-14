@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::{models::CsrfToken, AppState, Result};
+use crate::{models::CsrfToken, prelude::*};
 
 use std::time::SystemTime;
 
@@ -14,7 +14,7 @@ use axum::{
 };
 use serde::Deserialize;
 use tower_sessions::Session;
-use twitch_oauth2::{Scope, TwitchToken, UserTokenBuilder};
+use twitch_oauth2::{TwitchToken, UserTokenBuilder};
 
 pub fn add_routes(router: Router<AppState>) -> Router<AppState> {
     return router
@@ -62,7 +62,7 @@ async fn twitch_connect(
 
     let redirect = params.0.redirect.unwrap_or("/".to_string());
 
-    sqlx::query("INSERT INTO csrf_tokens (sid, token, expiry, redirect) VALUES ($1, $2, $3, $4)")
+    sqlx::query("INSERT INTO csrf_tokens (sid, token, expiry, redirect) VALUES (?, ?, ?, ?)")
         .bind(&session_id)
         .bind(csrf_token.secret())
         .bind(ttl_s as i64)
@@ -114,20 +114,27 @@ async fn twitch_callback(
 
     let session_id = utils::session_id(&session)?;
 
+    let csrf_token: Option<CsrfToken> = sqlx::query_as("SELECT * FROM csrf_tokens WHERE sid = ?")
+        .bind(&session_id)
+        .fetch_optional(&state.db)
+        .await?;
+
+    let Some(csrf_token) = csrf_token else {
+        return Ok((StatusCode::BAD_REQUEST, "No tokens for session").into_response());
+    };
+
     let now_s = SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
         .as_secs();
 
-    let csrf_token: Option<CsrfToken> =
-        sqlx::query_as("DELETE FROM csrf_tokens WHERE sid = $1 AND expiry > $2 RETURNING *")
-            .bind(&session_id)
-            .bind(now_s as i64)
-            .fetch_optional(&state.db)
-            .await?;
+    if csrf_token.expiry as u64 <= now_s {
+        return Ok((StatusCode::BAD_REQUEST, "Request timed out").into_response());
+    }
 
-    let Some(csrf_token) = csrf_token else {
-        return Ok((StatusCode::BAD_REQUEST, "No tokens for session".to_string()).into_response());
-    };
+    sqlx::query("DELETE FROM csrf_tokens WHERE id = ?")
+        .bind(&csrf_token.id)
+        .execute(&state.db)
+        .await?;
 
     let http_client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
@@ -158,12 +165,12 @@ async fn twitch_callback(
 
     let expiry_s = now_s + token.expires_in().as_secs();
 
-    sqlx::query("DELETE FROM session_auths WHERE sid = $1")
+    sqlx::query("DELETE FROM session_auths WHERE sid = ?")
         .bind(&session_id)
         .execute(&state.db)
         .await?;
 
-    sqlx::query("INSERT INTO session_auths (sid, username, access_token, refresh_token, expiry) VALUES ($1, $2, $3, $4, $5)")
+    sqlx::query("INSERT INTO session_auths (sid, username, access_token, refresh_token, expiry) VALUES (?, ?, ?, ?, ?)")
         .bind(&session_id)
         .bind(token.login.as_str())
         .bind(&token.access_token.secret())
@@ -195,7 +202,7 @@ async fn twitch_callback(
 async fn logout(session: Session, State(state): State<AppState>) -> Result<impl IntoResponse> {
     let session_id = session.id().0.to_string();
 
-    sqlx::query("DELETE FROM session_auths WHERE sid = $1")
+    sqlx::query("DELETE FROM session_auths WHERE sid = ?")
         .bind(&session_id)
         .execute(&state.db)
         .await?;

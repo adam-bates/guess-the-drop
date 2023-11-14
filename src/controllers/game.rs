@@ -1,8 +1,6 @@
 use super::*;
 
-use crate::{models::SessionAuth, AppState, Result};
-
-use std::time::SystemTime;
+use crate::{models::SessionAuth, prelude::*};
 
 use askama::Template;
 use askama_axum::Response;
@@ -70,11 +68,7 @@ async fn game(
 ) -> Result<Response> {
     let session_id = utils::session_id(&session)?;
 
-    let user: Option<SessionAuth> =
-        sqlx::query_as("SELECT * FROM session_auths WHERE sid = $1 LIMIT 1")
-            .bind(&session_id)
-            .fetch_optional(&state.db)
-            .await?;
+    let user = SessionAuth::find_by_id(&state.db, &session_id).await?;
 
     if let Some(user) = user {
         // let now_s = SystemTime::now()

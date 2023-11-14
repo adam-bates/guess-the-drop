@@ -7,21 +7,21 @@ edition = "2021"
 anyhow = "1.0.75"
 askama = { version = "0.12.1", features = ["with-axum"] }
 askama_axum = "0.3.0"
+async-trait = "0.1.74"
 axum = "0.6.20"
+dotenv = "0.15.0"
+mysql = "24.0.0"
 nanoid = "0.4.0"
 reqwest = "0.11.22"
+rmp-serde = "1.1.2"
 rust-s3 = "0.33.0"
 serde = { version = "1.0.191", features = ["derive"] }
-shuttle-axum = "0.32.0"
-shuttle-runtime = "0.32.0"
-shuttle-secrets = "0.32.0"
-shuttle-shared-db = { version = "0.32.0", features = ["postgres"] }
-sqlx = { version = "0.7.2", features = ["runtime-tokio-native-tls", "postgres"] }
-tokio = "1.28.2"
+sqlx = { version = "0.7.2", features = ["runtime-tokio-native-tls", "mysql"] }
+tokio = { version = "1.28.2", features = ["rt-multi-thread"] }
 tokio-stream = { version = "0.1.14", features = ["sync"] }
 tower = "0.4.13"
 tower-http = { version = "0.4.4", features = ["compression-full", "cors", "fs", "timeout"] }
-tower-sessions = { version = "0.4.1", features = ["postgres-store", "moka-store"] }
+tower-sessions = { version = "0.4.1", features = ["mysql-store", "moka-store"] }
 tracing = "0.1.40"
 twitch-irc = "5.0.1"
 twitch_oauth2 = { version = "0.12.7", features = ["client", "reqwest"] }

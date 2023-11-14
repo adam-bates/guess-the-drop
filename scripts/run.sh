@@ -1,5 +1,5 @@
 #!/bin/bash
 
-npx tailwindcss -i ./src/input.css -o ./assets/output.css --minify
+npx tailwindcss -i ./src/input.css -o ./assets/output.css
 
-cargo shuttle run
+cargo run
