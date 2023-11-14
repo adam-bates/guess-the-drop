@@ -1,5 +1,6 @@
 mod game;
 mod twitch;
+mod utils;
 
 use std::time::SystemTime;
 
@@ -19,12 +20,11 @@ pub fn add_routes(router: Router<AppState>) -> Router<AppState> {
 #[derive(Template)]
 #[template(path = "index.html")]
 struct IndexTemplate {
-    is_connected: bool,
-    username: String,
+    user: Option<SessionAuth>,
 }
 
 async fn index(session: Session, State(state): State<AppState>) -> Result<impl IntoResponse> {
-    let session_id = session.id().0.to_string();
+    let session_id = utils::session_id(&session)?;
 
     let user: Option<SessionAuth> =
         sqlx::query_as("SELECT * FROM session_auths WHERE sid = $1 LIMIT 1")
@@ -32,24 +32,16 @@ async fn index(session: Session, State(state): State<AppState>) -> Result<impl I
             .fetch_optional(&state.db)
             .await?;
 
-    if let Some(user) = user {
-        if let Some(expiry_s) = user.expiry {
-            let now_s = SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_secs();
+    // if let Some(user) = user {
+    //     let now_s = SystemTime::now()
+    //         .duration_since(SystemTime::UNIX_EPOCH)
+    //         .unwrap()
+    //         .as_secs();
 
-            if expiry_s as u64 > now_s {
-                return Ok(IndexTemplate {
-                    is_connected: true,
-                    username: user.username,
-                });
-            }
-        }
-    }
+    //     if user.expiry as u64 > now_s {
+    //         return Ok(IndexTemplate { user: Some(user) });
+    //     }
+    // }
 
-    return Ok(IndexTemplate {
-        is_connected: false,
-        username: String::new(),
-    });
+    return Ok(IndexTemplate { user });
 }

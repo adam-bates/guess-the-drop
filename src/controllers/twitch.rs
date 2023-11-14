@@ -1,3 +1,5 @@
+use super::*;
+
 use crate::{models::CsrfToken, AppState, Result};
 
 use std::time::SystemTime;
@@ -29,9 +31,10 @@ async fn twitch_connect(
         state.cfg.twitch_client_id.clone(),
         state.cfg.twitch_client_secret.clone(),
         state.cfg.twitch_callback_url.clone(),
-    )
-    // .force_verify(true)
-    .set_scopes(vec![Scope::ChatRead, Scope::ChatEdit]);
+    );
+
+    // TODO: Request scopes if user wants to send messages
+    // .set_scopes(vec![Scope::ChatRead, Scope::ChatEdit]);
 
     let (url, csrf_token) = twitch_client.generate_url();
 
@@ -41,7 +44,7 @@ async fn twitch_connect(
     let now_s = SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
         .as_secs();
-    let ttl_s = now_s + (10 * 60); // 10 mins
+    let ttl_s = now_s + 3600; // + 1 hour
 
     sqlx::query("INSERT INTO csrf_tokens (sid, token, expiry) VALUES ($1, $2, $3)")
         .bind(&session_id)
@@ -92,9 +95,7 @@ async fn twitch_callback(
         }
     };
 
-    let session_id = session
-        .get("sid")?
-        .unwrap_or_else(|| session.id().0.to_string());
+    let session_id = utils::session_id(&session)?;
 
     let now_s = SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
@@ -108,11 +109,7 @@ async fn twitch_callback(
             .await?;
 
     let Some(csrf_token) = csrf_token else {
-        return Ok((
-            StatusCode::BAD_REQUEST,
-            "No valid tokens for session".to_string(),
-        )
-            .into_response());
+        return Ok((StatusCode::BAD_REQUEST, "No tokens for session".to_string()).into_response());
     };
 
     let http_client = reqwest::Client::builder()
@@ -127,7 +124,11 @@ async fn twitch_callback(
     twitch_client.set_csrf(csrf_token.token.into());
 
     if !twitch_client.csrf_is_valid(twitch_state) {
-        todo!();
+        return Ok((
+            StatusCode::BAD_REQUEST,
+            "Session token is invalid".to_string(),
+        )
+            .into_response());
     }
 
     let token = twitch_client
@@ -139,8 +140,6 @@ async fn twitch_callback(
         .as_secs();
 
     let expiry_s = now_s + token.expires_in().as_secs();
-
-    // TODO: Try to remove old session
 
     sqlx::query("DELETE FROM session_auths WHERE sid = $1")
         .bind(&session_id)
