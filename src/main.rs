@@ -6,14 +6,20 @@ mod sessions;
 
 pub use crate::result::Result;
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use axum::{error_handling::HandleErrorLayer, http::StatusCode, Router};
+use reqwest::Method;
 use shuttle_axum::AxumService;
 use shuttle_secrets::SecretStore;
 use sqlx::PgPool;
 use tower::ServiceBuilder;
-use tower_http::services::{ServeDir, ServeFile};
+use tower_http::{
+    compression::CompressionLayer,
+    cors::CorsLayer,
+    services::{ServeDir, ServeFile},
+    timeout::TimeoutLayer,
+};
 use tower_sessions::{cookie::SameSite, Expiry, SessionManagerLayer};
 
 #[derive(Clone)]
@@ -68,7 +74,16 @@ async fn run(secrets: SecretStore, db: PgPool) -> Result<AxumService> {
         .route_service("/favicon.ico", ServeFile::new("assets/favicon.ico"))
         .nest_service("/assets", ServeDir::new("assets"));
 
-    let router = router.with_state(state).layer(session_service);
+    let cors = CorsLayer::new()
+        .allow_methods([Method::GET, Method::POST])
+        .allow_origin([state.cfg.server_host_uri.parse().unwrap()]);
+
+    let router = router
+        .with_state(state)
+        .layer(session_service)
+        .layer(cors)
+        .layer(CompressionLayer::new())
+        .layer(TimeoutLayer::new(Duration::from_secs(30)));
 
     return Ok(router.into());
 }

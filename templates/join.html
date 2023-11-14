@@ -10,10 +10,10 @@
 {% block content %}
     <div class="hero min-h-screen bg-base-200">
         <div class="hero-content text-center">
-            <div class="">
-                <h2 class="text-5xl font-bold mb-4">Join Game: {{ game_code }}</h2>
+            <div class="container">
+                <h2 class="text-5xl font-bold mb-10">Join Game: {{ game_code }}</h2>
 
-                <a href="/twitch/connect?redirect=/games/{{game_code}}" class="btn btn-secondary btn-md normal-case text-lg">
+                <a href="/twitch/connect?redirect=/games/{{game_code}}" class="btn btn-secondary btn-md normal-case text-lg mt-5">
                     Connect to Twitch
                 </a>
             </div>
