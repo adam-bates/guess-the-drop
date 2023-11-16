@@ -1,0 +1,18 @@
+app = "guess-the-drop"
+primary_region = "yyz"
+
+# WARNING: Publically visible!
+[env]
+  SERVER_PROTOCOL = "https"
+  SERVER_DOMAIN = "guessthedrop.com"
+  SERVER_PORT = 8000
+  SERVER_HOST_URI = "https://guessthedrop.com"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 2
+  processes = ["app"]
+

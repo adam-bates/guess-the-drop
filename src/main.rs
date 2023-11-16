@@ -57,6 +57,7 @@ async fn main() -> Result {
         }))
         .layer(
             SessionManagerLayer::new(session_store)
+                .with_name("snowy.sid")
                 .with_domain(state.cfg.server_domain.to_string())
                 .with_expiry(Expiry::OnSessionEnd)
                 .with_secure(false)

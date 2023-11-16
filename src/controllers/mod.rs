@@ -6,13 +6,16 @@ use crate::{models::SessionAuth, prelude::*};
 
 use askama::Template;
 use axum::{extract::State, response::IntoResponse, routing::get, Router};
+use reqwest::StatusCode;
 use tower_sessions::Session;
 
 pub fn add_routes(router: Router<AppState>) -> Router<AppState> {
     let router = game::add_routes(router);
     let router = twitch::add_routes(router);
 
-    return router.route("/", get(index));
+    return router
+        .route("/", get(index))
+        .route("/health", get(|| async { StatusCode::NO_CONTENT }));
 }
 
 #[derive(Template)]

@@ -21,29 +21,20 @@ pub struct Config {
 }
 
 pub fn load() -> Result<Config> {
-    let file = if cfg!(debug_assertions) {
-        ".dev.env"
-    } else {
-        ".env"
-    };
-
-    dotenv::from_filename(file)?;
+    if cfg!(debug_assertions) {
+        dotenv::dotenv()?;
+    }
 
     let server_protocol = env::var("SERVER_PROTOCOL")?;
     let server_domain = env::var("SERVER_DOMAIN")?;
     let server_port = env::var("SERVER_PORT")?;
+    let server_host_uri = env::var("SERVER_HOST_URI")?;
 
     let server_port = if &server_port == "" {
         None
     } else {
         Some(server_port.parse()?)
     };
-
-    let server_port_postfix = server_port
-        .map(|p| format!(":{p}"))
-        .unwrap_or_else(String::new);
-
-    let server_host_uri = format!("{server_protocol}://{server_domain}{server_port_postfix}");
 
     let twitch_callback_url = format!("{server_host_uri}/twitch/callback")
         .parse()

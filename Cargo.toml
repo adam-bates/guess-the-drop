@@ -3,6 +3,11 @@ name = "guess-the-drop"
 version = "0.1.0"
 edition = "2021"
 
+# Defining bin here to make multi stage docker build work
+[[bin]]
+name = "guess-the-drop"
+path = "src/main.rs"
+
 [dependencies]
 anyhow = "1.0.75"
 askama = { version = "0.12.1", features = ["with-axum"] }
@@ -26,3 +31,5 @@ tracing = "0.1.40"
 twitch-irc = "5.0.1"
 twitch_oauth2 = { version = "0.12.7", features = ["client", "reqwest"] }
 
+# Needed to fix docker build
+openssl = { version = "0.10", features = ["vendored"] }
