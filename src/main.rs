@@ -5,10 +5,13 @@ mod result;
 mod sessions;
 
 use prelude::*;
+use s3::Bucket;
 
 use std::{sync::Arc, time::Duration};
 
-use axum::{error_handling::HandleErrorLayer, http::StatusCode, Router, Server};
+use axum::{
+    error_handling::HandleErrorLayer, extract::DefaultBodyLimit, http::StatusCode, Router, Server,
+};
 use reqwest::Method;
 use sqlx::MySqlPool;
 use tower::ServiceBuilder;
@@ -30,12 +33,28 @@ pub mod prelude {
 #[derive(Clone)]
 pub struct AppState {
     cfg: Arc<Config>,
+    bucket: Bucket,
     db: MySqlPool,
 }
 
 #[tokio::main]
 async fn main() -> Result {
     let cfg = config::load()?;
+
+    let bucket = s3::Bucket::new(
+        &cfg.r2_bucket,
+        s3::Region::R2 {
+            account_id: cfg.r2_account_id.clone(),
+        },
+        s3::creds::Credentials::new(
+            Some(&cfg.r2_s3_access_key_id),
+            Some(&cfg.r2_s3_secret_access_key),
+            None,
+            None,
+            None,
+        )?,
+    )?
+    .with_path_style();
 
     let db = MySqlPool::connect(&cfg.db_connection_url).await?;
     sqlx::migrate!().run(&db).await?;
@@ -46,6 +65,7 @@ async fn main() -> Result {
 
     let state = AppState {
         cfg: Arc::new(cfg),
+        bucket,
         db,
     };
 

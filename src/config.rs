@@ -18,6 +18,13 @@ pub struct Config {
 
     pub db_connection_url: String,
     pub db_database: String,
+
+    pub r2_bucket: String,
+    pub r2_account_id: String,
+    pub r2_bucket_public_url: String,
+
+    pub r2_s3_access_key_id: String,
+    pub r2_s3_secret_access_key: String,
 }
 
 pub fn load() -> Result<Config> {
@@ -50,7 +57,14 @@ pub fn load() -> Result<Config> {
         twitch_client_secret: env::var("TWITCH_CLIENT_SECRET")?.into(),
         twitch_callback_url,
 
-        db_connection_url: env::var("DB_CONNECTION_URL")?.into(),
-        db_database: env::var("DB_DATABASE")?.into(),
+        db_connection_url: env::var("DB_CONNECTION_URL")?,
+        db_database: env::var("DB_DATABASE")?,
+
+        r2_bucket: env::var("R2_BUCKET")?,
+        r2_bucket_public_url: env::var("R2_BUCKET_PUBLIC_URL")?,
+        r2_account_id: env::var("R2_ACCOUNT_ID")?,
+
+        r2_s3_access_key_id: env::var("R2_S3_ACCESS_KEY_ID")?,
+        r2_s3_secret_access_key: env::var("R2_S3_SECRET_ACCESS_KEY")?,
     });
 }

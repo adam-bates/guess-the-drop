@@ -13,7 +13,7 @@ anyhow = "1.0.75"
 askama = { version = "0.12.1", features = ["with-axum"] }
 askama_axum = "0.3.0"
 async-trait = "0.1.74"
-axum = "0.6.20"
+axum = { version = "0.6.20", features = ["multipart"] }
 dotenv = "0.15.0"
 mysql = "24.0.0"
 nanoid = "0.4.0"
@@ -33,3 +33,4 @@ twitch_oauth2 = { version = "0.12.7", features = ["client", "reqwest"] }
 
 # Needed to fix docker build
 openssl = { version = "0.10", features = ["vendored"] }
+serde_json = "1.0.108"
