@@ -1,10 +1,9 @@
 mod game;
+mod game_template;
 mod twitch;
 mod utils;
 
-use std::collections::HashMap;
-
-use crate::{models::SessionAuth, prelude::*};
+use crate::{models::User, prelude::*};
 
 use askama::Template;
 use axum::{
@@ -26,6 +25,7 @@ pub fn add_routes(router: Router<AppState>) -> Router<AppState> {
         .route_layer(DefaultBodyLimit::max(10 * MB));
 
     let router = game::add_routes(router);
+    let router = game_template::add_routes(router);
     let router = twitch::add_routes(router);
 
     return router
@@ -36,17 +36,19 @@ pub fn add_routes(router: Router<AppState>) -> Router<AppState> {
 #[derive(Template)]
 #[template(path = "index.html")]
 struct IndexTemplate {
-    user: Option<SessionAuth>,
+    user: Option<User>,
 }
 
 async fn index(session: Session, State(state): State<AppState>) -> Result<impl IntoResponse> {
-    let session_id = utils::session_id(&session)?;
+    let sid = utils::session_id(&session)?;
 
-    let user: Option<SessionAuth> =
-        sqlx::query_as("SELECT * FROM session_auths WHERE sid = ? LIMIT 1")
-            .bind(&session_id)
-            .fetch_optional(&state.db)
-            .await?;
+    // let user: Option<User> = sqlx::query_as("SELECT * FROM session_auths WHERE sid = ? LIMIT 1")
+    //     .bind(&sid)
+    //     .fetch_optional(&state.db)
+    //     .await?;
+
+    let user_auth = utils::find_user(&state, &sid).await?;
+    let user = user_auth.map(|ua| ua.split().0);
 
     return Ok(IndexTemplate { user });
 }

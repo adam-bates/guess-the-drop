@@ -1,0 +1,11 @@
+{% extends "authed-base.html" %}
+
+{% block content %}
+    <div class="flex flex-row">
+        {% for template in templates %}
+            <div class="card">
+                <h3>{{ template.name }}</h3>
+            </div>
+        {% endfor %}
+    </div>
+{% endblock %}

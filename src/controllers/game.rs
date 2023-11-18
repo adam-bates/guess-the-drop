@@ -1,6 +1,9 @@
 use super::*;
 
-use crate::{models::SessionAuth, prelude::*};
+use crate::{
+    models::{SessionAuth, User},
+    prelude::*,
+};
 
 use askama::Template;
 use askama_axum::Response;
@@ -43,11 +46,10 @@ async fn join(
         return Ok(Redirect::to("/").into_response());
     }
 
-    let session_id = utils::session_id(&session)?;
+    let sid = utils::session_id(&session)?;
+    let user_auth = utils::find_user(&state, &sid).await?;
 
-    let user = SessionAuth::find_by_id(&state.db, &session_id).await?;
-
-    if user.is_some() {
+    if user_auth.is_some() {
         return Ok(Redirect::to(&format!("/games/{}", game_code)).into_response());
     }
 
@@ -58,7 +60,7 @@ async fn join(
 #[template(path = "game.html")]
 struct GameTemplate {
     game_code: String,
-    user: SessionAuth,
+    user: User,
 }
 
 async fn game(
@@ -68,9 +70,11 @@ async fn game(
 ) -> Result<Response> {
     let session_id = utils::session_id(&session)?;
 
-    let user = SessionAuth::find_by_id(&state.db, &session_id).await?;
+    let user_auth = utils::find_user(&state, &session_id).await?;
 
-    if let Some(user) = user {
+    if let Some(user_auth) = user_auth {
+        let (user, _) = user_auth.split();
+
         // let now_s = SystemTime::now()
         //     .duration_since(SystemTime::UNIX_EPOCH)
         //     .unwrap()
