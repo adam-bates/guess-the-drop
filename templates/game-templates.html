@@ -1,11 +1,59 @@
 {% extends "authed-base.html" %}
 
 {% block content %}
-    <div class="flex flex-row">
-        {% for template in templates %}
-            <div class="card">
-                <h3>{{ template.name }}</h3>
+<div class="grid gap-4 xs:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+
+    {% if can_create %}
+    <a href="/game-templates/new" class="cursor:pointer card bg-primary shadow-xl">
+        <div class="card-body flex flex-col justify-center">
+            <h2 class="card-title text-black flex flex-col justify-center">
+                <div class="flex flex-row gap-4 text-xl">
+                    <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/PjxzdmcgY2xhc3M9ImZlYXRoZXIgZmVhdGhlci1wbHVzLXNxdWFyZSIgZmlsbD0ibm9uZSIgaGVpZ2h0PSIyNCIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLXdpZHRoPSIyIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHdpZHRoPSIyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiIHdpZHRoPSIxOCIgeD0iMyIgeT0iMyIvPjxsaW5lIHgxPSIxMiIgeDI9IjEyIiB5MT0iOCIgeTI9IjE2Ii8+PGxpbmUgeDE9IjgiIHgyPSIxNiIgeTE9IjEyIiB5Mj0iMTIiLz48L3N2Zz4=" />
+                    Create
+                <div>
+            </h2>
+        </div>
+    </a>
+    {% endif %}
+
+    {% for template in templates %}
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body flex flex-col justify-between gap-4">
+                <h2 class="card-title">{{ template.name }}</h2>
+
+                <div class="card-actions flex flex-row justify-end">
+                    <form method="POST" action="/games">
+                        <input type="hidden" name="template" value="{{ template.game_template_id }}" />
+                        <button type="submit" class="btn btn-primary btn-sm">Start</button>
+                    </form>
+
+                    <a href="/game-templates/{{ template.game_template_id }}" class="btn btn-accent btn-sm btn-square">
+                        <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/PjxzdmcgY2xhc3M9ImZlYXRoZXIgZmVhdGhlci1lZGl0IiBmaWxsPSJub25lIiBoZWlnaHQ9IjI0IiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2Utd2lkdGg9IjIiIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxwYXRoIGQ9Ik0xMSA0SDRhMiAyIDAgMCAwLTIgMnYxNGEyIDIgMCAwIDAgMiAyaDE0YTIgMiAwIDAgMCAyLTJ2LTciLz48cGF0aCBkPSJNMTguNSAyLjVhMi4xMjEgMi4xMjEgMCAwIDEgMyAzTDEyIDE1bC00IDEgMS00IDkuNS05LjV6Ii8+PC9zdmc+">
+                    </a>
+
+                    <button onclick="delete_modal_{{ template.game_template_id }}.showModal()" class="btn btn-error btn-sm btn-square">
+                        <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/PjxzdmcgY2xhc3M9ImZlYXRoZXIgZmVhdGhlci10cmFzaC0yIiBmaWxsPSJub25lIiBoZWlnaHQ9IjI0IiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2Utd2lkdGg9IjIiIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxwb2x5bGluZSBwb2ludHM9IjMgNiA1IDYgMjEgNiIvPjxwYXRoIGQ9Ik0xOSA2djE0YTIgMiAwIDAgMS0yIDJIN2EyIDIgMCAwIDEtMi0yVjZtMyAwVjRhMiAyIDAgMCAxIDItMmg0YTIgMiAwIDAgMSAyIDJ2MiIvPjxsaW5lIHgxPSIxMCIgeDI9IjEwIiB5MT0iMTEiIHkyPSIxNyIvPjxsaW5lIHgxPSIxNCIgeDI9IjE0IiB5MT0iMTEiIHkyPSIxNyIvPjwvc3ZnPg==" />
+                    </button>
+
+                    <dialog id="delete_modal_{{ template.game_template_id }}" class="modal">
+                        <div class="modal-box">
+                            <h3 class="font-bold text-lg">Delete <em>{{ template.name }}</em>?</h3>
+                            <p class="py-4">This action is permanant and cannot be undone!</p>
+                            <div class="modal-action flex flex-row justify-end gap-2">
+                                <form method="dialog">
+                                    <button class="btn btn-ghost">Cancel</button>
+                                </form>
+                                <a href="/game-templates" class="btn btn-error">Delete</a>
+                            </div>
+                        </div>
+
+                        <form method="dialog" class="modal-backdrop">
+                            <button>close</button>
+                        </form>
+                    </dialog>
+                </div>
             </div>
-        {% endfor %}
-    </div>
+        </div>
+    {% endfor %}
+</div>
 {% endblock %}

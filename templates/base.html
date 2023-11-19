@@ -14,41 +14,45 @@
 
     {% block head %}{% endblock %}
 </head>
-    <body>
-        <div class="navbar top-0 bg-base-100">
-            <div class="flex-1">
-                <a href="/" class="btn btn-ghost normal-case text-xl">Guess The Drop</a>
+    <body class="bg-base-200">
+        <div class="min-h-screen flex flex-col">
+            <div class="navbar flex flex-row bg-base-100">
+                <div class="flex-1">
+                    <a href="/" class="btn btn-ghost normal-case text-xl">Guess The Drop</a>
+                </div>
+                <div class="flex-none gap-2">
+                    {% block navbar_content %}
+                        <form action="/join" method="get" class="join">
+                            <button type="submit" class="btn btn-primary btn-sm normal-case join-item rounded-l-full">Join</button>
+                            <input type="text" name="code" class="input input-sm input-bordered join-item" placeholder="Game Code"/>
+                        </form>
+
+                        <div class="divider divider-horizontal"></div>
+
+                        {% if let Some(user) = user %}
+                            <div class="dropdown dropdown-end">
+                                <label tabindex="0" class="btn btn-ghost normal-case text-md">
+                                    Hey, {{ user.username }}
+                                </label>
+                                <ul tabindex="0" class="mt-3 z-[1] p-2 shadow menu menu-sm dropdown-content bg-base-100 rounded-box">
+                                    <li><a href="/logout">Logout</a></li>
+                                </ul>
+                            </div>
+                        {% else %}
+                            <a href="/twitch/connect" class="btn btn-secondary btn-sm normal-case text-md mr-3">
+                                Connect to Twitch
+                            </a>
+                        {% endif %}
+                    {% endblock %}
+                </div>
             </div>
-            <div class="flex-none gap-2">
-                {% block navbar_content %}
-                    <form action="/join" method="get" class="join">
-                        <button type="submit" class="btn btn-primary btn-sm normal-case join-item rounded-l-full">Join</button>
-                        <input type="text" name="code" class="input input-sm input-bordered join-item" placeholder="Game Code"/>
-                    </form>
 
-                    <div class="divider divider-horizontal"></div>
-
-                    {% if let Some(user) = user %}
-                        <div class="dropdown dropdown-end">
-                            <label tabindex="0" class="btn btn-ghost normal-case text-md">
-                                Hey, {{ user.username }}
-                            </label>
-                            <ul tabindex="0" class="mt-3 z-[1] p-2 shadow menu menu-sm dropdown-content bg-base-100 rounded-box">
-                                <li><a href="/logout">Logout</a></li>
-                            </ul>
-                        </div>
-                    {% else %}
-                        <a href="/twitch/connect" class="btn btn-secondary btn-sm normal-case text-md mr-3">
-                            Connect to Twitch
-                        </a>
-                    {% endif %}
+            <div class="flex-grow container mx-auto p-6">
+                {% block content %}
+                    <p>Oops... Snowy forgot to add content here</p>
                 {% endblock %}
             </div>
         </div>
-
-        {% block content %}
-            <p>Oops... Snowy forgot to add content here</p>
-        {% endblock %}
     </body>
 </html>
 
