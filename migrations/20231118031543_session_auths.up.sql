@@ -4,7 +4,8 @@ CREATE TABLE IF NOT EXISTS session_auths (
     user_id VARCHAR(128) NOT NULL,
     access_token VARCHAR(1024) NOT NULL,
     refresh_token VARCHAR(1024) NOT NULL,
-	expiry BIGINT NOT NULL
+	expiry BIGINT NOT NULL,
+	can_chat BOOLEAN NOT NULL
 );
 
 CREATE INDEX idx_session_auths_sid ON session_auths(sid);

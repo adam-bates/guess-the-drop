@@ -3,7 +3,8 @@ CREATE TABLE IF NOT EXISTS csrf_tokens (
 	sid VARCHAR(128) NOT NULL,
 	token VARCHAR(1024) NOT NULL,
 	expiry BIGINT,
-	redirect VARCHAR(1024)
+	redirect VARCHAR(1024),
+	with_chat BOOLEAN NOT NULL
 );
 
 CREATE INDEX idx_csrf_tokens_sid ON csrf_tokens(sid);

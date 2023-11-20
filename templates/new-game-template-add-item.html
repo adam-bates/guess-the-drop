@@ -5,7 +5,14 @@
 
     <div class="w-full max-w-lg bordered flex flex-col gap-2">
         <input type="text" name="items[{{ idx }}].name" required placeholder="Type here" class="input input-bordered" />
-        <input type="file" name="items[{{ idx }}].image" placeholder="Image" class="file-input file-input-bordered" />
+        <input type="file" name="items[{{ idx }}].image" class="file-input file-input-bordered" />
+
+        <div class="flex flex-row gap-2">
+            <label for="items[{{ idx }}].start_enabled" class="label py-0 cursor-pointer">
+                <input type="checkbox" id="items[{{ idx }}].start_enabled" checked name="items[{{ idx }}].start_enabled" class="checkbox" />
+                <span class="label-text cursor-pointer mx-2">Start enabled</span>
+            </label>
+        </div>
     </div>
 </div>
 

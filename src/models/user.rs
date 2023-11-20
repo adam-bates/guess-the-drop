@@ -5,7 +5,7 @@ use crate::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::{self, MySqlPool};
 
-#[derive(sqlx::FromRow, Serialize, Deserialize)]
+#[derive(sqlx::FromRow, Serialize, Deserialize, Debug, Clone)]
 pub struct User {
     pub user_id: String,
     pub username: String,

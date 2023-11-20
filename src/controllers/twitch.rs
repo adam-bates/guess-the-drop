@@ -14,7 +14,7 @@ use axum::{
 };
 use serde::Deserialize;
 use tower_sessions::Session;
-use twitch_oauth2::{TwitchToken, UserTokenBuilder};
+use twitch_oauth2::{Scope, TwitchToken, UserTokenBuilder};
 
 pub fn add_routes(router: Router<AppState>) -> Router<AppState> {
     return router
@@ -26,6 +26,7 @@ pub fn add_routes(router: Router<AppState>) -> Router<AppState> {
 #[derive(Deserialize)]
 struct TwitchConnectParams {
     redirect: Option<String>,
+    with_chat: Option<bool>,
 }
 
 async fn twitch_connect(
@@ -41,14 +42,17 @@ async fn twitch_connect(
         return Ok((StatusCode::BAD_REQUEST, "Invalid redirect value").into_response());
     }
 
+    let with_chat = matches!(params.with_chat, Some(true));
+
     let mut twitch_client = UserTokenBuilder::new(
         state.cfg.twitch_client_id.clone(),
         state.cfg.twitch_client_secret.clone(),
         state.cfg.twitch_callback_url.clone(),
     );
 
-    // TODO: Request scopes if user wants to send messages
-    // .set_scopes(vec![Scope::ChatRead, Scope::ChatEdit]);
+    if with_chat {
+        twitch_client = twitch_client.set_scopes(vec![Scope::ChatEdit]);
+    }
 
     let (url, csrf_token) = twitch_client.generate_url();
 
@@ -62,13 +66,16 @@ async fn twitch_connect(
 
     let redirect = params.0.redirect.unwrap_or("/".to_string());
 
-    sqlx::query("INSERT INTO csrf_tokens (sid, token, expiry, redirect) VALUES (?, ?, ?, ?)")
-        .bind(&session_id)
-        .bind(csrf_token.secret())
-        .bind(ttl_s as i64)
-        .bind(redirect)
-        .execute(&state.db)
-        .await?;
+    sqlx::query(
+        "INSERT INTO csrf_tokens (sid, token, expiry, redirect, with_chat) VALUES (?, ?, ?, ?, ?)",
+    )
+    .bind(&session_id)
+    .bind(csrf_token.secret())
+    .bind(ttl_s as i64)
+    .bind(redirect)
+    .bind(with_chat)
+    .execute(&state.db)
+    .await?;
 
     return Ok(response::Redirect::to(url.as_str()).into_response());
 }
@@ -127,8 +134,10 @@ async fn twitch_callback(
         .duration_since(std::time::UNIX_EPOCH)?
         .as_secs();
 
-    if csrf_token.expiry as u64 <= now_s {
-        return Ok((StatusCode::BAD_REQUEST, "Request timed out").into_response());
+    if let Some(expiry) = csrf_token.expiry {
+        if expiry as u64 <= now_s {
+            return Ok((StatusCode::BAD_REQUEST, "Request timed out").into_response());
+        }
     }
 
     sqlx::query("DELETE FROM csrf_tokens WHERE id = ?")
@@ -170,18 +179,19 @@ async fn twitch_callback(
         .execute(&state.db)
         .await?;
 
-    sqlx::query("INSERT INTO users (user_id, username) VALUES (?, ?)")
+    sqlx::query("INSERT IGNORE INTO users (user_id, username) VALUES (?, ?)")
         .bind(token.user_id.as_str())
         .bind(token.login.as_str())
         .execute(&state.db)
         .await?;
 
-    sqlx::query("INSERT INTO session_auths (sid, user_id, access_token, refresh_token, expiry) VALUES (?, ?, ?, ?, ?)")
+    sqlx::query("INSERT INTO session_auths (sid, user_id, access_token, refresh_token, expiry, can_chat) VALUES (?, ?, ?, ?, ?, ?)")
         .bind(&sid)
         .bind(token.user_id.as_str())
         .bind(&token.access_token.secret())
         .bind(&token.refresh_token.as_ref().map(|t| t.secret()).unwrap_or_default())
         .bind(expiry_s as i64)
+        .bind(csrf_token.with_chat)
         .execute(&state.db)
         .await?;
 
