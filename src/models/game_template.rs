@@ -12,4 +12,5 @@ pub struct GameTemplate {
 
     pub name: String,
     pub reward_message: Option<String>,
+    pub total_reward_message: Option<String>,
 }

@@ -30,18 +30,27 @@
             <h2 class="text-xl">New Template</h2>
 
             <div class="form-control w-full max-w-lg">
-                <label class="label">
+                <label for="name" class="label">
                     <span class="label-text">Name</span>
                 </label>
 
-                <input type="text" name="name" required placeholder="Type here" class="input input-bordered w-full max-w-lg" />
+                <input type="text" id="name" name="name" required placeholder="Type here" class="input input-bordered w-full max-w-lg" />
             </div>
 
             <div id="post-msg-section" class="flex flex-col gap-4">
                 <div hx-trigger="click" hx-get="/game-templates/new/x/post-msg" hx-target="#post-msg-section" class="form-control w-full max-w-lg flex flex-row gap-2 cursor-pointer">
                     <input type="checkbox" name="should-post" class="checkbox" />
                     <label class="label py-0 cursor-pointer">
-                        <span class="label-text cursor-pointer">Post reward message to Twitch chat when user guesses correctly?</span>
+                        <span class="label-text cursor-pointer">Send twitch chat on correct guess?</span>
+                    </label>
+                </div>
+            </div>
+
+            <div id="post-total-msg-section" class="flex flex-col gap-4">
+                <div hx-trigger="click" hx-get="/game-templates/new/x/post-total-msg" hx-target="#post-total-msg-section" class="form-control w-full max-w-lg flex flex-row gap-2 cursor-pointer">
+                    <input type="checkbox" name="should-post-total" class="checkbox" />
+                    <label class="label py-0 cursor-pointer">
+                        <span class="label-text cursor-pointer">Send twitch chat on most correct guesses at the end?</span>
                     </label>
                 </div>
             </div>

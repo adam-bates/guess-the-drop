@@ -36,6 +36,10 @@ pub struct AppState {
 
 #[tokio::main]
 async fn main() -> Result {
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .init();
+
     let cfg = Arc::new(config::load()?);
 
     let bucket = s3_bucket(&cfg)?;

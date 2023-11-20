@@ -1,10 +1,16 @@
 <div class="form-control w-full max-w-lg">
-    <label class="label">
-        <span class="label-text">Item {{ idx + 1 }}</span>
+    <label for="items[{{ idx }}].name" class="label flex flex-row gap-2 justify-start">
+        <button class="btn btn-circle btn-error btn-xs">
+            <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/PjxzdmcgY2xhc3M9ImZlYXRoZXIgZmVhdGhlci1taW51cy1jaXJjbGUiIGZpbGw9Im5vbmUiIGhlaWdodD0iMjQiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIHN0cm9rZS13aWR0aD0iMiIgdmlld0JveD0iMCAwIDI0IDI0IiB3aWR0aD0iMjQiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiLz48bGluZSB4MT0iOCIgeDI9IjE2IiB5MT0iMTIiIHkyPSIxMiIvPjwvc3ZnPg==">
+        </button>
+
+        <span class="label-text">
+            Item {{ idx + 1 }}
+        </span>
     </label>
 
     <div class="w-full max-w-lg bordered flex flex-col gap-2">
-        <input type="text" name="items[{{ idx }}].name" required placeholder="Type here" class="input input-bordered" />
+        <input type="text" id="items[{{ idx }}].name" name="items[{{ idx }}].name" required placeholder="Type here" class="input input-bordered" />
         <input type="file" name="items[{{ idx }}].image" class="file-input file-input-bordered" />
 
         <div class="flex flex-row gap-2">

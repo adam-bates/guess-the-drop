@@ -1,17 +1,17 @@
-<div id="post-msg-section" class="flex flex-col gap-4">
-    <div hx-trigger="click" hx-get="/game-templates/new/x/no-post-msg" hx-target="#post-msg-section" class="form-control w-full max-w-lg flex flex-row gap-2 cursor-pointer">
-        <input type="checkbox" id="should-post" name="should-post" class="checkbox" checked />
-        <label for="should-post" class="label py-0 cursor-pointer">
+<div id="post-total-msg-section" class="flex flex-col gap-4">
+    <div hx-trigger="click" hx-get="/game-templates/new/x/no-post-total-msg" hx-target="#post-total-msg-section" class="form-control w-full max-w-lg flex flex-row gap-2 cursor-pointer">
+        <input type="checkbox" id="should-post-total" name="should-post-total" class="checkbox" checked />
+        <label for="should-post-total" class="label py-0 cursor-pointer">
             <span class="label-text cursor-pointer">Post reward message to Twitch chat when user guesses correctly?</span>
         </label>
     </div>
 
     <div class="form-control w-full max-w-lg">
-        <label for="post-msg" class="label">
+        <label for="post-total-msg" class="label">
             <span class="label-text">Chat Message</span>
         </label>
 
-        <input type="text" id="post-msg" name="post-msg" required placeholder="<USER> correctly guessed <ITEM>" class="input input-bordered w-full max-w-lg" />
+        <input type="text" id="post-total-msg" name="post-total-msg" required placeholder="<USER> won with <POINTS> / <TOTAL> correct guesses" class="input input-bordered w-full max-w-lg" />
     </div>
 
     {% if !session.can_chat %}

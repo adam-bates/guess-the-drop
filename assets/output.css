@@ -725,6 +725,13 @@ html {
   padding: 0px;
 }
 
+.btn-circle {
+  height: 3rem;
+  width: 3rem;
+  border-radius: 9999px;
+  padding: 0px;
+}
+
 .btn-group > input[type="radio"].btn {
   -webkit-appearance: none;
      -moz-appearance: none;
@@ -2169,6 +2176,14 @@ html {
   border-radius: var(--rounded-box, 1rem);
 }
 
+.btn-xs {
+  height: 1.5rem;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  min-height: 1.5rem;
+  font-size: 0.75rem;
+}
+
 .btn-sm {
   height: 2rem;
   padding-left: 0.75rem;
@@ -2209,6 +2224,13 @@ html {
   padding: 0px;
 }
 
+.btn-circle:where(.btn-xs) {
+  height: 1.5rem;
+  width: 1.5rem;
+  border-radius: 9999px;
+  padding: 0px;
+}
+
 .btn-circle:where(.btn-sm) {
   height: 2rem;
   width: 2rem;
@@ -2219,6 +2241,13 @@ html {
 .btn-circle:where(.btn-md) {
   height: 3rem;
   width: 3rem;
+  border-radius: 9999px;
+  padding: 0px;
+}
+
+.btn-circle:where(.btn-lg) {
+  height: 4rem;
+  width: 4rem;
   border-radius: 9999px;
   padding: 0px;
 }
@@ -2541,6 +2570,10 @@ html {
 
 .flex-col {
   flex-direction: column;
+}
+
+.justify-start {
+  justify-content: flex-start;
 }
 
 .justify-end {
