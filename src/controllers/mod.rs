@@ -27,6 +27,26 @@ pub fn add_routes(router: Router<AppState>) -> Router<AppState> {
     );
 }
 
+pub struct Html<T: Template>(pub T);
+
+impl<T: Template> IntoResponse for Html<T> {
+    fn into_response(self) -> axum::response::Response {
+        match self.0.render() {
+            Ok(body) => {
+                let body = minify_html::minify(body.as_bytes(), &minify_html::Cfg::default());
+
+                let headers = [(
+                    axum::http::header::CONTENT_TYPE,
+                    axum::http::HeaderValue::from_static(T::MIME_TYPE),
+                )];
+
+                return (headers, body).into_response();
+            }
+            Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        }
+    }
+}
+
 #[derive(Template)]
 #[template(path = "index.html")]
 struct IndexTemplate {

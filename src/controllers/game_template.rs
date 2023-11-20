@@ -79,12 +79,12 @@ async fn templates(session: Session, State(state): State<AppState>) -> Result<im
     //     id += 1;
     // }
 
-    return Ok(GameTemplatesTemplate {
+    return Ok(Html(GameTemplatesTemplate {
         can_create: game_templates.len() < MAX_TEMPLATES_PER_USER,
 
         user,
         templates: game_templates,
-    });
+    }));
 }
 
 #[derive(Template)]
@@ -100,7 +100,7 @@ async fn new_template(
     let sid = utils::session_id(&session)?;
     let (user, _) = utils::require_user(&state, &sid).await?.split();
 
-    return Ok(NewGameTemplateTemplate { user });
+    return Ok(Html(NewGameTemplateTemplate { user }));
 }
 
 #[derive(Deserialize)]
@@ -115,7 +115,7 @@ struct NewGameTemplateAddItemTemplate {
 }
 
 async fn new_template_x_add_item(params: Query<NewGameTempateAddItemParams>) -> impl IntoResponse {
-    return NewGameTemplateAddItemTemplate { idx: params.idx };
+    return Html(NewGameTemplateAddItemTemplate { idx: params.idx });
 }
 
 #[derive(Template)]
@@ -131,9 +131,9 @@ async fn new_template_x_post_msg(
     let sid = utils::session_id(&session)?;
     let (_, session_auth) = utils::require_user(&state, &sid).await?.split();
 
-    return Ok(NewGameTemplatePostMsgTemplate {
+    return Ok(Html(NewGameTemplatePostMsgTemplate {
         session: session_auth,
-    });
+    }));
 }
 
 #[derive(Template)]
@@ -157,9 +157,9 @@ async fn new_template_x_post_total_msg(
     let sid = utils::session_id(&session)?;
     let (_, session_auth) = utils::require_user(&state, &sid).await?.split();
 
-    return Ok(NewGameTemplatePostTotalMsgTemplate {
+    return Ok(Html(NewGameTemplatePostTotalMsgTemplate {
         session: session_auth,
-    });
+    }));
 }
 
 #[derive(Template)]

@@ -1,15 +1,11 @@
 use super::*;
 
-use crate::{
-    models::{SessionAuth, User},
-    prelude::*,
-};
+use crate::{models::User, prelude::*};
 
 use askama::Template;
-use askama_axum::Response;
 use axum::{
     extract::{Path, Query, State},
-    response::{IntoResponse, Redirect},
+    response::{IntoResponse, Redirect, Response},
     routing::get,
     Router,
 };
@@ -53,7 +49,7 @@ async fn join(
         return Ok(Redirect::to(&format!("/games/{}", game_code)).into_response());
     }
 
-    return Ok(JoinTemplate { game_code }.into_response());
+    return Ok(Html(JoinTemplate { game_code }).into_response());
 }
 
 #[derive(Template)]
@@ -81,7 +77,7 @@ async fn game(
         //     .as_secs();
 
         // if user.expiry as u64 > now_s {
-        return Ok(GameTemplate { game_code, user }.into_response());
+        return Ok(Html(GameTemplate { game_code, user }).into_response());
         // }
     }
 

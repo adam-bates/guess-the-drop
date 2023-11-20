@@ -4,11 +4,10 @@ use crate::{models::CsrfToken, prelude::*};
 
 use std::time::SystemTime;
 
-use askama_axum::Response;
 use axum::{
     extract::{Query, State},
     http::StatusCode,
-    response::{self, IntoResponse},
+    response::{self, IntoResponse, Response},
     routing::get,
     Router,
 };

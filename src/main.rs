@@ -26,6 +26,8 @@ pub mod prelude {
     pub use crate::result::Result;
 
     pub use crate::AppState;
+
+    pub use crate::controllers::Html;
 }
 use prelude::*;
 
