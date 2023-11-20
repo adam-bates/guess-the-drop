@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, io::BufWriter};
 
 use super::utils;
 
@@ -64,20 +64,20 @@ async fn templates(session: Session, State(state): State<AppState>) -> Result<im
             .fetch_all(&state.db)
             .await?;
 
-    let mut id = 1;
+    // let mut id = 1;
 
-    for _ in 0..20 {
-        game_templates.push(GameTemplate {
-            game_template_id: id,
-            user_id: user.user_id.clone(),
+    // for _ in 0..20 {
+    //     game_templates.push(GameTemplate {
+    //         game_template_id: id,
+    //         user_id: user.user_id.clone(),
 
-            name: nanoid!(),
-            reward_message: None,
-            total_reward_message: None,
-        });
+    //         name: nanoid!(),
+    //         reward_message: None,
+    //         total_reward_message: None,
+    //     });
 
-        id += 1;
-    }
+    //     id += 1;
+    // }
 
     return Ok(GameTemplatesTemplate {
         can_create: game_templates.len() < MAX_TEMPLATES_PER_USER,
@@ -170,7 +170,14 @@ async fn new_template_x_no_post_total_msg() -> impl IntoResponse {
     return NewGameTemplateNoPostTotalMsgTemplate {};
 }
 
-async fn post_template(mut form: Multipart) -> Result<impl IntoResponse> {
+async fn post_template(
+    session: Session,
+    State(state): State<AppState>,
+    mut form: Multipart,
+) -> Result<impl IntoResponse> {
+    let sid = utils::session_id(&session)?;
+    let (user, _) = utils::require_user(&state, &sid).await?.split();
+
     let mut name = None;
 
     let mut should_post = None;
@@ -288,15 +295,6 @@ async fn post_template(mut form: Multipart) -> Result<impl IntoResponse> {
     let reward_message = should_post.map(|_| post_msg).flatten();
     let total_reward_message = should_post_total.map(|_| post_total_msg).flatten();
 
-    let template = GameTemplate {
-        game_template_id: 0,
-        user_id: nanoid!(),
-
-        name,
-        reward_message,
-        total_reward_message,
-    };
-
     let items = {
         let mut list = vec![];
 
@@ -304,27 +302,87 @@ async fn post_template(mut form: Multipart) -> Result<impl IntoResponse> {
         keys.sort();
 
         for key in keys {
-            let (name, image, start_enabled) = items.remove(&key).unwrap();
+            let (name, img, start_enabled) = items.remove(&key).unwrap();
 
             let Some(name) = name else {
                 return Err(anyhow::anyhow!("Item {} has no name", key + 1))?;
             };
 
-            list.push(GameItemTemplate {
-                game_item_template_id: 0,
-                game_template_id: 0,
-
-                name,
-                image: image.map(|x| x.0), // TODO: upload
-                start_enabled: start_enabled == Some(true),
-            });
+            list.push((name, img, start_enabled == Some(true)));
         }
 
         list
     };
 
-    // TODO: upload images, save to DB
-    dbg!(&template, &items);
+    let items = {
+        let mut list = vec![];
+
+        for (name, img, start_enabled) in items {
+            let img = if let Some((filename, bytes)) = img {
+                let img = image::load_from_memory(&bytes)?;
+
+                const MAX_IMG_SIZE: u32 = 256;
+                if img.width() > MAX_IMG_SIZE || img.height() > MAX_IMG_SIZE {
+                    img.resize(
+                        MAX_IMG_SIZE,
+                        MAX_IMG_SIZE,
+                        image::imageops::FilterType::Nearest,
+                    );
+                }
+
+                let mut data = vec![0u8; 0];
+                img.write_with_encoder(image::codecs::png::PngEncoder::new(BufWriter::new(
+                    &mut data,
+                )))?;
+
+                let key = format!("item_{}_{filename}", nanoid!());
+
+                state.bucket.put_object(&key, &data).await?;
+
+                Some(format!("{}/{key}", state.cfg.r2_bucket_public_url))
+            } else {
+                None
+            };
+
+            list.push((name, img, start_enabled));
+        }
+
+        list
+    };
+
+    sqlx::query("INSERT INTO game_templates (user_id, name, reward_message, total_reward_message) VALUES (?, ?, ?, ?)")
+        .bind(&user.user_id)
+        .bind(&name)
+        .bind(&reward_message)
+        .bind(&total_reward_message)
+        .execute(&state.db)
+        .await?;
+
+    let record: GameTemplate =
+        sqlx::query_as("SELECT * FROM game_templates WHERE user_id = ? AND name = ? LIMIT 1")
+            .bind(&user.user_id)
+            .bind(&name)
+            .fetch_one(&state.db)
+            .await?;
+
+    if !items.is_empty() {
+        let query = format!(
+            "INSERT INTO game_item_templates (game_template_id, name, image, start_enabled) VALUES {}",
+            items.iter().map(|_| "(?, ?, ?, ?)").collect::<Vec<&'static str>>().join(",")
+        );
+
+        let mut q = sqlx::query(&query);
+
+        for (name, img, start_enabled) in items {
+            q = q
+                .bind(&record.game_template_id)
+                .bind(name)
+                .bind(img)
+                .bind(start_enabled);
+        }
+
+        q.execute(&state.db).await?;
+    }
 
     return Ok("ok");
 }

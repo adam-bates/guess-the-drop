@@ -663,6 +663,11 @@ html {
     color: hsl(var(--pf) / var(--tw-text-opacity));
   }
 
+  .link-error:hover {
+    --tw-text-opacity: 1;
+    color: hsl(var(--er) / var(--tw-text-opacity));
+  }
+
   .menu li > *:not(ul):not(.menu-title):not(details):active,
 .menu li > *:not(ul):not(.menu-title):not(details).active,
 .menu li > details > summary:active {
@@ -722,13 +727,6 @@ html {
 .btn-square {
   height: 3rem;
   width: 3rem;
-  padding: 0px;
-}
-
-.btn-circle {
-  height: 3rem;
-  width: 3rem;
-  border-radius: 9999px;
   padding: 0px;
 }
 
@@ -1902,6 +1900,11 @@ html {
   color: hsl(var(--p) / var(--tw-text-opacity));
 }
 
+.link-error {
+  --tw-text-opacity: 1;
+  color: hsl(var(--er) / var(--tw-text-opacity));
+}
+
 .link:focus {
   outline: 2px solid transparent;
   outline-offset: 2px;
@@ -2176,14 +2179,6 @@ html {
   border-radius: var(--rounded-box, 1rem);
 }
 
-.btn-xs {
-  height: 1.5rem;
-  padding-left: 0.5rem;
-  padding-right: 0.5rem;
-  min-height: 1.5rem;
-  font-size: 0.75rem;
-}
-
 .btn-sm {
   height: 2rem;
   padding-left: 0.75rem;
@@ -2224,13 +2219,6 @@ html {
   padding: 0px;
 }
 
-.btn-circle:where(.btn-xs) {
-  height: 1.5rem;
-  width: 1.5rem;
-  border-radius: 9999px;
-  padding: 0px;
-}
-
 .btn-circle:where(.btn-sm) {
   height: 2rem;
   width: 2rem;
@@ -2241,13 +2229,6 @@ html {
 .btn-circle:where(.btn-md) {
   height: 3rem;
   width: 3rem;
-  border-radius: 9999px;
-  padding: 0px;
-}
-
-.btn-circle:where(.btn-lg) {
-  height: 4rem;
-  width: 4rem;
   border-radius: 9999px;
   padding: 0px;
 }
@@ -2672,6 +2653,10 @@ html {
 .text-black {
   --tw-text-opacity: 1;
   color: rgb(0 0 0 / var(--tw-text-opacity));
+}
+
+.no-underline {
+  text-decoration-line: none;
 }
 
 .shadow {

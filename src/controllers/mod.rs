@@ -7,30 +7,24 @@ use crate::{models::User, prelude::*};
 
 use askama::Template;
 use axum::{
-    extract::{DefaultBodyLimit, Multipart, State},
+    extract::{Multipart, State},
     response::IntoResponse,
-    routing::{get, post},
+    routing::get,
     Router,
 };
 use nanoid::nanoid;
 use reqwest::StatusCode;
 use tower_sessions::Session;
 
-const KB: usize = 1024;
-const MB: usize = 1024 * KB;
-
 pub fn add_routes(router: Router<AppState>) -> Router<AppState> {
-    let router = router
-        .route("/upload", post(upload))
-        .route_layer(DefaultBodyLimit::max(10 * MB));
-
     let router = game::add_routes(router);
     let router = game_template::add_routes(router);
     let router = twitch::add_routes(router);
 
-    return router
-        .route("/", get(index))
-        .route("/health", get(|| async { StatusCode::NO_CONTENT }));
+    return router.route("/", get(index)).route(
+        "/health",
+        get(|| async { (StatusCode::OK, "Service is healthy") }),
+    );
 }
 
 #[derive(Template)]
@@ -41,19 +35,17 @@ struct IndexTemplate {
 
 async fn index(session: Session, State(state): State<AppState>) -> Result<impl IntoResponse> {
     let sid = utils::session_id(&session)?;
-
-    // let user: Option<User> = sqlx::query_as("SELECT * FROM session_auths WHERE sid = ? LIMIT 1")
-    //     .bind(&sid)
-    //     .fetch_optional(&state.db)
-    //     .await?;
-
     let user_auth = utils::find_user(&state, &sid).await?;
-    let user = user_auth.map(|ua| ua.split().0);
+
+    let user = user_auth.map(|ua| {
+        let (user, _) = ua.split();
+        return user;
+    });
 
     return Ok(IndexTemplate { user });
 }
 
-async fn upload(State(state): State<AppState>, mut files: Multipart) -> Result<impl IntoResponse> {
+async fn _upload(State(state): State<AppState>, mut files: Multipart) -> Result<impl IntoResponse> {
     let Some(file) = files.next_field().await? else {
         return Ok(format!("Error fetching file"));
     };

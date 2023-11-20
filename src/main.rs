@@ -6,7 +6,9 @@ mod sessions;
 
 use std::{sync::Arc, time::Duration};
 
-use axum::{error_handling::HandleErrorLayer, http::StatusCode, Router, Server};
+use axum::{
+    error_handling::HandleErrorLayer, extract::DefaultBodyLimit, http::StatusCode, Router, Server,
+};
 use reqwest::Method;
 use s3::{creds::Credentials, Bucket, Region};
 use sqlx::MySqlPool;
@@ -82,8 +84,12 @@ async fn main() -> Result {
         .allow_methods([Method::GET, Method::POST])
         .allow_origin([state.cfg.server_host_uri.parse().unwrap()]);
 
+    const KB: usize = 1024;
+    const MB: usize = 1024 * KB;
+
     let router = router
         .with_state(state)
+        .layer(DefaultBodyLimit::max(64 * MB))
         .layer(session_service)
         .layer(cors)
         .layer(CompressionLayer::new())
