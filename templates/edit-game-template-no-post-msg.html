@@ -1,0 +1,8 @@
+<div id="post-msg-section" class="flex flex-col gap-4">
+    <div hx-trigger="click" hx-get="/game-templates/{{ template.game_template_id }}/x/post-msg" hx-target="#post-msg-section" class="form-control w-full max-w-lg flex flex-row gap-2 cursor-pointer">
+        <input type="checkbox" name="should-post" class="checkbox" />
+        <label class="label py-0 cursor-pointer">
+            <span class="label-text cursor-pointer">Send twitch chat on correct guess?</span>
+        </label>
+    </div>
+</div>

@@ -1,0 +1,185 @@
+{% extends "authed-base.html" %}
+
+{% block content %}
+    <form hx-put="/game-templates/{{ template.game_template_id }}" enctype="multipart/form-data">
+        <div class="flex flex-col gap-5">
+            <div class="flex flex-row gap-5">
+                <div>
+                    <button type="button" onclick="cancel.showModal()" class="btn btn-error btn-sm text-black">
+                        <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/PjxzdmcgY2xhc3M9ImZlYXRoZXIgZmVhdGhlci1hcnJvdy1sZWZ0IiBmaWxsPSJub25lIiBoZWlnaHQ9IjI0IiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2Utd2lkdGg9IjIiIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxsaW5lIHgxPSIxOSIgeDI9IjUiIHkxPSIxMiIgeTI9IjEyIi8+PHBvbHlsaW5lIHBvaW50cz0iMTIgMTkgNSAxMiAxMiA1Ii8+PC9zdmc+" />
+                        Cancel
+                    </button>
+
+                    <dialog id="cancel" class="modal">
+                        <div class="modal-box">
+                            <h3 class="font-bold text-lg">Lose all progress?</h3>
+                            <p class="py-4">Cancelling will revert all unsaved changes. This cannot be undone.</p>
+                            <div class="modal-action flex flex-row justify-end gap-2">
+                                <form method="dialog">
+                                    <button class="btn btn-ghost">Stay Here</button>
+                                </form>
+                                <a href="/game-templates" class="btn btn-error">Revert Changes</a>
+                            </div>
+                        </div>
+
+                        <form method="dialog" class="modal-backdrop">
+                            <button>close</button>
+                        </form>
+                    </dialog>
+                </div>
+
+                <div>
+                    <button type="button" onclick="start.showModal()" class="btn btn-primary btn-sm text-black">
+                        <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/PjxzdmcgY2xhc3M9ImZlYXRoZXIgZmVhdGhlci1wbGF5IiBmaWxsPSJub25lIiBoZWlnaHQ9IjI0IiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2Utd2lkdGg9IjIiIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxwb2x5Z29uIHBvaW50cz0iNSAzIDE5IDEyIDUgMjEgNSAzIi8+PC9zdmc+" />
+                        Start New Game
+                    </button>
+
+                    <dialog id="start" class="modal">
+                        <div class="modal-box">
+                            <h3 class="font-bold text-lg">New Game</h3>
+                            <p class="py-4">Ready to start?</p>
+                            <div class="modal-action flex flex-row justify-end gap-2">
+                                <form method="dialog">
+                                    <button class="btn btn-ghost">Cancel</button>
+                                </form>
+                                <form action="/games" method="POST">
+                                    <input type="hidden" name="template" value="{{ template.game_template_id }}" />
+                                    <button class="btn btn-primary">Lets go!</button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <form method="dialog" class="modal-backdrop">
+                            <button>close</button>
+                        </form>
+                    </dialog>
+                </div>
+            </div>
+
+            <h2 class="text-xl">Edit Template</h2>
+
+            <div class="form-control w-full max-w-lg">
+                <label for="name" class="label">
+                    <span class="label-text">Name</span>
+                </label>
+
+                <input type="text" id="name" name="name" required placeholder="Type here" value="{{ template.name }}" class="input input-bordered w-full max-w-lg" />
+            </div>
+
+            {% if let Some(post_msg) = template.reward_message %}
+                <div id="post-msg-section" class="flex flex-col gap-4">
+                    <div hx-trigger="click" hx-get="/game-templates/{{ template.game_template_id }}/x/no-post-msg" hx-target="#post-msg-section" class="form-control w-full max-w-lg flex flex-row gap-2 cursor-pointer">
+                        <input type="checkbox" id="should-post" name="should-post" class="checkbox" checked />
+                        <label for="should-post" class="label py-0 cursor-pointer">
+                            <span class="label-text cursor-pointer">Post reward message to Twitch chat when user guesses correctly?</span>
+                        </label>
+                    </div>
+
+                    <div class="form-control w-full max-w-lg">
+                        <label for="post-msg" class="label">
+                            <span class="label-text">Chat Message</span>
+                        </label>
+
+                        <input type="text" id="post-msg" name="post-msg" required placeholder="<USER> correctly guessed <ITEM>" value="{{ post_msg }}" class="input input-bordered w-full max-w-lg" />
+                    </div>
+
+                    {% if !session.can_chat %}
+                        <a href="/twitch/connect?with_chat=true" target="_blank" class="w-full max-w-lg">
+                          <div role="alert" class="alert alert-warning w-full max-w-lg">
+                              <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                              <span>Click here to update Twitch chat permissions.</span>
+                          </div>
+                        </a>
+                    {% endif %}
+                </div>
+            {% else %}
+                <div id="post-msg-section" class="flex flex-col gap-4">
+                    <div hx-trigger="click" hx-get="/game-templates/{{ template.game_template_id }}/x/post-msg" hx-target="#post-msg-section" class="form-control w-full max-w-lg flex flex-row gap-2 cursor-pointer">
+                        <input type="checkbox" name="should-post" class="checkbox" />
+                        <label class="label py-0 cursor-pointer">
+                            <span class="label-text cursor-pointer">Send twitch chat on correct guess?</span>
+                        </label>
+                    </div>
+                </div>
+            {% endif %}
+
+            {% if let Some(post_total_msg) = template.total_reward_message %}
+                <div id="post-total-msg-section" class="flex flex-col gap-4">
+                    <div hx-trigger="click" hx-get="/game-templates/{{ template.game_template_id }}/x/no-post-total-msg" hx-target="#post-total-msg-section" class="form-control w-full max-w-lg flex flex-row gap-2 cursor-pointer">
+                        <input type="checkbox" id="should-post-total" name="should-post-total" class="checkbox" checked />
+                        <label for="should-post-total" class="label py-0 cursor-pointer">
+                            <span class="label-text cursor-pointer">Post reward message to Twitch chat when user guesses correctly?</span>
+                        </label>
+                    </div>
+
+                    <div class="form-control w-full max-w-lg">
+                        <label for="post-total-msg" class="label">
+                            <span class="label-text">Chat Message</span>
+                        </label>
+
+                        <input type="text" id="post-total-msg" name="post-total-msg" required placeholder="<USER> won with <POINTS> / <TOTAL> correct guesses" value="{{ post_total_msg }}" class="input input-bordered w-full max-w-lg" />
+                    </div>
+
+                    {% if !session.can_chat %}
+                        <a href="/twitch/connect?with_chat=true" target="_blank" class="w-full max-w-lg">
+                          <div role="alert" class="alert alert-warning w-full max-w-lg">
+                              <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                              <span>Click here to update Twitch chat permissions.</span>
+                          </div>
+                        </a>
+                    {% endif %}
+                </div>
+            {% else %}
+                <div id="post-total-msg-section" class="flex flex-col gap-4">
+                    <div hx-trigger="click" hx-get="/game-templates/{{ template.game_template_id }}/x/post-total-msg" hx-target="#post-total-msg-section" class="form-control w-full max-w-lg flex flex-row gap-2 cursor-pointer">
+                        <input type="checkbox" name="should-post-total" class="checkbox" />
+                        <label class="label py-0 cursor-pointer">
+                            <span class="label-text cursor-pointer">Send twitch chat on most correct guesses at the end?</span>
+                        </label>
+                    </div>
+                </div>
+            {% endif %}
+
+            <h3 class="text-lg">Items</h3>
+
+            {% for (idx, item) in items %}
+                <div id="add-item-{{ idx }}" class="form-control w-full max-w-lg">
+                    <input type="hidden" name="items[{{ idx }}].id" value="{{ item.game_item_template_id }}">
+
+                    <label for="items[{{ idx }}].name" class="label flex flex-row gap-4 justify-start">
+                        <button type="button" hx-get="/health" hx-on="click" hx-target="#add-item-{{ idx }}" hx-swap="delete" class="link link-error no-underline">
+                            -
+                        </button>
+
+                        <span class="label-text">
+                            Item {{ idx + 1 }}
+                        </span>
+                    </label>
+
+                    {% if let Some(img) = item.image %}
+                        <img src="{{ img_base_uri }}/{{ img }}" />
+                    {% endif %}
+
+                    <div class="w-full max-w-lg bordered flex flex-col gap-2">
+                        <input type="text" id="items[{{ idx }}].name" name="items[{{ idx }}].name" required placeholder="Type here" value="{{ item.name }}" class="input input-bordered" />
+                        <input type="file" name="items[{{ idx }}].image" class="file-input file-input-bordered" />
+
+                        <div class="flex flex-row gap-2">
+                            <label for="items[{{ idx }}].start_enabled" class="label py-0 cursor-pointer">
+                                <input type="checkbox" id="items[{{ idx }}].start_enabled" {% if item.start_enabled %} checked {% endif %} name="items[{{ idx }}].start_enabled" class="checkbox" />
+                                <span class="label-text cursor-pointer mx-2">Start enabled</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+
+            <button type="button" hx-get="/game-templates/{{ template.game_template_id }}/x/add-item?idx={{ items.len() }}" hx-swap="outerHTML" class="btn btn-accent w-full max-w-lg text-black">
+                <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/PjxzdmcgY2xhc3M9ImZlYXRoZXIgZmVhdGhlci1wbHVzLXNxdWFyZSIgZmlsbD0ibm9uZSIgaGVpZ2h0PSIyNCIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLXdpZHRoPSIyIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHdpZHRoPSIyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiIHdpZHRoPSIxOCIgeD0iMyIgeT0iMyIvPjxsaW5lIHgxPSIxMiIgeDI9IjEyIiB5MT0iOCIgeTI9IjE2Ii8+PGxpbmUgeDE9IjgiIHgyPSIxNiIgeTE9IjEyIiB5Mj0iMTIiLz48L3N2Zz4=" />
+                Add Item
+            </button>
+
+            <button type="submit" class="btn btn-primary w-full max-w-lg">Update Template</button>
+        </div>
+    </form>
+{% endblock %}

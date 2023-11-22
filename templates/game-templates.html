@@ -17,15 +17,37 @@
     {% endif %}
 
     {% for template in templates %}
-        <div class="card bg-base-100 shadow-xl">
+        <div id="card-{{ template.game_template_id }}" class="card bg-base-100 shadow-xl">
             <div class="card-body flex flex-col justify-between gap-4">
                 <h2 class="card-title">{{ template.name }}</h2>
 
                 <div class="card-actions flex flex-row justify-end">
-                    <form method="POST" action="/games">
-                        <input type="hidden" name="template" value="{{ template.game_template_id }}" />
-                        <button type="submit" class="btn btn-primary btn-sm">Start</button>
-                    </form>
+                     <div>
+                        <button type="button" onclick="start.showModal()" class="btn btn-primary btn-sm text-black">
+                            <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/PjxzdmcgY2xhc3M9ImZlYXRoZXIgZmVhdGhlci1wbGF5IiBmaWxsPSJub25lIiBoZWlnaHQ9IjI0IiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2Utd2lkdGg9IjIiIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxwb2x5Z29uIHBvaW50cz0iNSAzIDE5IDEyIDUgMjEgNSAzIi8+PC9zdmc+" />
+                            Start
+                        </button>
+
+                        <dialog id="start" class="modal">
+                            <div class="modal-box">
+                                <h3 class="font-bold text-lg">New Game</h3>
+                                <p class="py-4">Ready to start?</p>
+                                <div class="modal-action flex flex-row justify-end gap-2">
+                                    <form method="dialog">
+                                        <button class="btn btn-ghost">Cancel</button>
+                                    </form>
+                                    <form action="/games" method="POST">
+                                        <input type="hidden" name="template" value="{{ template.game_template_id }}" />
+                                        <button class="btn btn-primary">Lets go!</button>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <form method="dialog" class="modal-backdrop">
+                                <button>close</button>
+                            </form>
+                        </dialog>
+                    </div>
 
                     <a href="/game-templates/{{ template.game_template_id }}" class="btn btn-accent btn-sm btn-square">
                         <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/PjxzdmcgY2xhc3M9ImZlYXRoZXIgZmVhdGhlci1lZGl0IiBmaWxsPSJub25lIiBoZWlnaHQ9IjI0IiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2Utd2lkdGg9IjIiIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxwYXRoIGQ9Ik0xMSA0SDRhMiAyIDAgMCAwLTIgMnYxNGEyIDIgMCAwIDAgMiAyaDE0YTIgMiAwIDAgMCAyLTJ2LTciLz48cGF0aCBkPSJNMTguNSAyLjVhMi4xMjEgMi4xMjEgMCAwIDEgMyAzTDEyIDE1bC00IDEgMS00IDkuNS05LjV6Ii8+PC9zdmc+">
@@ -43,7 +65,7 @@
                                 <form method="dialog">
                                     <button class="btn btn-ghost">Cancel</button>
                                 </form>
-                                <a href="/game-templates" class="btn btn-error">Delete</a>
+                                <a hx-delete="/game-templates/{{ template.game_template_id }}" hx-swap="outerHTML" hx-target="#card-{{ template.game_template_id }}" class="btn btn-error">Delete</a>
                             </div>
                         </div>
 
