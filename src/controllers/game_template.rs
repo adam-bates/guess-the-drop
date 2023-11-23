@@ -192,7 +192,7 @@ struct EditGameTemplateTemplate {
 }
 
 async fn edit_template(
-    Path(id): Path<u32>,
+    Path(id): Path<u64>,
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Response> {
@@ -239,7 +239,7 @@ struct EditGameTemplateAddItemTemplate {
 }
 
 async fn edit_template_x_add_item(
-    Path(id): Path<u32>,
+    Path(id): Path<u64>,
     params: Query<EditGameTempateAddItemParams>,
     session: Session,
     State(state): State<AppState>,
@@ -274,7 +274,7 @@ struct EditGameTemplatePostMsgTemplate {
 }
 
 async fn edit_template_x_post_msg(
-    Path(id): Path<u32>,
+    Path(id): Path<u64>,
     session: Session,
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse> {
@@ -307,7 +307,7 @@ struct EditGameTemplateNoPostMsgTemplate {
 }
 
 async fn edit_template_x_no_post_msg(
-    Path(id): Path<u32>,
+    Path(id): Path<u64>,
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Response> {
@@ -340,7 +340,7 @@ struct EditGameTemplatePostTotalMsgTemplate {
 }
 
 async fn edit_template_x_post_total_msg(
-    Path(id): Path<u32>,
+    Path(id): Path<u64>,
     session: Session,
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse> {
@@ -373,7 +373,7 @@ struct EditGameTemplateNoPostTotalMsgTemplate {
 }
 
 async fn edit_template_x_no_post_total_msg(
-    Path(id): Path<u32>,
+    Path(id): Path<u64>,
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Response> {
@@ -620,7 +620,7 @@ async fn post_template(
 }
 
 async fn put_template(
-    Path(id): Path<u32>,
+    Path(id): Path<u64>,
     session: Session,
     State(state): State<AppState>,
     mut form: Multipart,
@@ -646,7 +646,7 @@ async fn put_template(
             .fetch_all(&state.db)
             .await?;
 
-    let prev_game_items: HashMap<u32, GameItemTemplate> = prev_game_items
+    let prev_game_items: HashMap<u64, GameItemTemplate> = prev_game_items
         .into_iter()
         .map(|t| (t.game_item_template_id, t))
         .collect();
@@ -716,7 +716,7 @@ async fn put_template(
 
                 match &item_field_name[(close_idx + 2)..] {
                     "id" => {
-                        *item_id = Some(field.text().await?.parse::<u32>()?);
+                        *item_id = Some(field.text().await?.parse::<u64>()?);
                     }
                     "name" => {
                         *item_name = Some(field.text().await?.trim().to_string());
@@ -903,7 +903,7 @@ async fn put_template(
 }
 
 async fn delete_template(
-    Path(id): Path<u32>,
+    Path(id): Path<u64>,
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Response> {
@@ -943,10 +943,6 @@ async fn delete_template(
         .bind(&id)
         .execute(&state.db)
         .await?;
-
-    // let mut res = Redirect::to("/game-templates").into_response();
-    // res.headers_mut()
-    //     .insert("HX-Redirect", HeaderValue::from_static("/game-templates"));
 
     return Ok("".into_response());
 }

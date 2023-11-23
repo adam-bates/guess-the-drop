@@ -7,23 +7,23 @@ use sqlx::{self, MySqlPool};
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Clone)]
 pub struct SessionAuth {
-    pub id: u32,
+    pub id: u64,
     pub sid: String,
     pub user_id: String,
     pub access_token: String,
     pub refresh_token: String,
-    pub expiry: i64,
+    pub expiry: u64,
     pub can_chat: bool,
 }
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Clone)]
 pub struct SessionAuthWithUser {
-    pub id: u32,
+    pub id: u64,
     pub sid: String,
     pub user_id: String,
     pub access_token: String,
     pub refresh_token: String,
-    pub expiry: i64,
+    pub expiry: u64,
     pub can_chat: bool,
 
     pub username: String,

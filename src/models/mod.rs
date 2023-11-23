@@ -18,3 +18,15 @@ pub use game_item::*;
 
 mod user;
 pub use user::*;
+
+mod game_player;
+pub use game_player::*;
+
+mod game_winner;
+pub use game_winner::*;
+
+mod player_guess;
+pub use player_guess::*;
+
+mod game_item_outcome;
+pub use game_item_outcome::*;

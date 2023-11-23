@@ -1,12 +1,10 @@
-use crate::Result;
-
 use serde::{Deserialize, Serialize};
-use sqlx::{self, MySqlPool};
+use sqlx;
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Debug, Clone)]
 pub struct GameItem {
-    pub game_item_id: u32,
-    pub game_id: u32,
+    pub game_item_id: u64,
+    pub game_code: String,
 
     pub name: String,
     pub image: Option<String>,
