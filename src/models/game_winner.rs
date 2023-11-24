@@ -5,4 +5,5 @@ use sqlx;
 pub struct GameWinner {
     pub game_winner_id: u64,
     pub game_player_id: u64,
+    pub game_code: String,
 }

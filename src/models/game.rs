@@ -18,3 +18,41 @@ pub struct Game {
     pub reward_message: Option<String>,
     pub total_reward_message: Option<String>,
 }
+
+#[derive(sqlx::FromRow, Serialize, Deserialize, Debug, Clone)]
+pub struct GameWithJoinedSummary {
+    pub game_code: String,
+    pub user_id: String,
+
+    pub status: String,
+    pub created_at: u64,
+    pub active_at: u64,
+
+    pub name: String,
+    pub reward_message: Option<String>,
+    pub total_reward_message: Option<String>,
+
+    pub players_count: i64,
+    pub winners_count: i64,
+    pub winning_points: i32,
+
+    pub is_winner: Option<bool>,
+}
+
+#[derive(sqlx::FromRow, Serialize, Deserialize, Debug, Clone)]
+pub struct GameWithHostedSummary {
+    pub game_code: String,
+    pub user_id: String,
+
+    pub status: String,
+    pub created_at: u64,
+    pub active_at: u64,
+
+    pub name: String,
+    pub reward_message: Option<String>,
+    pub total_reward_message: Option<String>,
+
+    pub players_count: i64,
+    pub winners_count: i64,
+    pub winning_points: i32,
+}

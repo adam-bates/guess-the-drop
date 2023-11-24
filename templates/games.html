@@ -1,0 +1,70 @@
+{% extends "authed-base.html" %}
+
+{% block content %}
+    <h2 class="text-5xl font-bold">Twitch name: {{ user.username }}</h2>
+
+    <div class="divider"></div>
+
+    <div class="grid gap-4 xs:grid-cols-1 md:grid-cols-2">
+        <div class="flex flex-col gap-2">
+            <h3>Games Hosted</h3>
+            <table class="table border">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Code</th>
+                        <th>Status</th>
+                        <th>Players</th>
+                        <th>Winners</th>
+                        <th>Winning Points</th>
+                    </tr>
+                </thead>
+
+                {% for game in games_hosted %}
+                    <tbody>
+                        <tr>
+                            <td>{{ game.name }}</td>
+                            <th>{{ game.game_code }}</th>
+                            <td>{{ game.status }}</td>
+                            <td>{{ game.players_count }}</td>
+                            <td>{{ game.winners_count }}</td>
+                            <td>{{ game.winning_points }}</td>
+                        </tr>
+                    </tbody>
+                {% endfor %}
+            </table>
+        </div>
+
+        <div class="flex flex-col gap-2">
+            <h3>Games Joined</h3>
+            <table class="table border">
+                <thead>
+                    <tr>
+                        <th>Did you win?</th>
+                        <th>Name</th>
+                        <th>Code</th>
+                        <th>Status</th>
+                        <th>Players</th>
+                        <th>Winners</th>
+                        <th>Winning Points</th>
+                    </tr>
+                </thead>
+
+                {% for game in games_joined %}
+                    <tbody>
+                        <tr>
+                            <td>{{ game.is_winner.unwrap_or(false) }}</td>
+                            <td>{{ game.name }}</td>
+                            <th>{{ game.game_code }}</th>
+                            <td>{{ game.status }}</td>
+                            <td>{{ game.players_count }}</td>
+                            <td>{{ game.winners_count }}</td>
+                            <td>{{ game.winning_points }}</td>
+                        </tr>
+                    </tbody>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+{% endblock %}
+

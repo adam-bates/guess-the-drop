@@ -1,0 +1,42 @@
+{% extends "authed-base.html" %}
+
+{% block content %}
+    <h2 class="text-5xl font-bold">Game code: {{ game.game_code }}</h2>
+    <h2 class="text-5xl font-bold">Twitch name: {{ user.username }}</h2>
+    <p>You are the host.</p>
+
+    <div class="divider"></div>
+
+    <h3>Name: {{ game.name }}</h3>
+    <h3>Status: {{ game.status }}</h3>
+    <h3>Created At: {{ game.created_at }}</h3>
+    <h3>Active At: {{ game.active_at }}</h3>
+    <h3>Reward Message: {% if let Some(msg) = game.reward_message %} {{ msg }} {% endif %}</h3>
+    <h3>Total Reward Message: {% if let Some(msg) = game.total_reward_message %} {{ msg }} {% endif %}</h3>
+
+    <div class="divider"></div>
+
+    <div class="grid gap-4 xs:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {% for item in items %}
+            <div id="card-{{ item.game_item_id }}" class="card bg-base-100 shadow-xl">
+                <div class="card-body flex flex-col gap-4">
+                    <h2 class="card-title">{{ item.name }}</h2>
+
+                    <div class="card-actions flex flex-row justify-end">
+                         <div>
+                            <button type="button" class="btn btn-primary btn-sm text-black">
+                                <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/PjxzdmcgY2xhc3M9ImZlYXRoZXIgZmVhdGhlci1wbGF5IiBmaWxsPSJub25lIiBoZWlnaHQ9IjI0IiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2Utd2lkdGg9IjIiIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxwb2x5Z29uIHBvaW50cz0iNSAzIDE5IDEyIDUgMjEgNSAzIi8+PC9zdmc+" />
+                                Guess
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {% if let Some(image) = item.image %}
+                    <figure><img src="{{ img_base_uri }}/{{ image }}" /></figure>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+{% endblock %}
+

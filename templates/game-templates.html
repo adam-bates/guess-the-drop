@@ -23,12 +23,12 @@
 
                 <div class="card-actions flex flex-row justify-end">
                      <div>
-                        <button type="button" onclick="start.showModal()" class="btn btn-primary btn-sm text-black">
+                        <button type="button" onclick="start_{{ template.game_template_id }}.showModal()" class="btn btn-primary btn-sm text-black">
                             <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/PjxzdmcgY2xhc3M9ImZlYXRoZXIgZmVhdGhlci1wbGF5IiBmaWxsPSJub25lIiBoZWlnaHQ9IjI0IiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2Utd2lkdGg9IjIiIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxwb2x5Z29uIHBvaW50cz0iNSAzIDE5IDEyIDUgMjEgNSAzIi8+PC9zdmc+" />
                             Start
                         </button>
 
-                        <dialog id="start" class="modal">
+                        <dialog id="start_{{ template.game_template_id }}" class="modal">
                             <div class="modal-box">
                                 <h3 class="font-bold text-lg">New Game</h3>
                                 <p class="py-4">Ready to start?</p>

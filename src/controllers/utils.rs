@@ -10,6 +10,8 @@ pub fn session_id(session: &Session) -> Result<String> {
 }
 
 pub async fn find_user(state: &AppState, session_id: &str) -> Result<Option<SessionAuthWithUser>> {
+    // TODO: In-mem cache
+
     let found: Option<SessionAuthWithUser> = sqlx::query_as("SELECT * FROM session_auths INNER JOIN users ON session_auths.user_id = users.user_id WHERE sid = ? LIMIT 1")
         .bind(session_id)
         .fetch_optional(&state.db)
