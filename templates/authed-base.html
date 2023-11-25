@@ -1,6 +1,18 @@
 {% extends "base.html" %}
 
+{% block navbar_title %}
+    <a href="/" class="btn btn-ghost normal-case text-xl">Guess The Drop</a>
+    <a href="/games" class="link link-ghost no-underline">Games</a>
+{% endblock %}
+
 {% block navbar_content %}
+    <form action="/join" method="get" class="join">
+        <button type="submit" class="btn btn-primary btn-sm normal-case join-item rounded-l-full">Join</button>
+        <input type="text" name="code" class="input input-sm input-bordered join-item" placeholder="Game Code"/>
+    </form>
+
+    <div class="divider divider-horizontal"></div>
+
     <div class="dropdown dropdown-end">
         <label tabindex="0" class="btn btn-ghost normal-case text-md">
             Hey, {{ user.username }}

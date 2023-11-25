@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 
+{% block navbar_title %}
+    <a href="/" class="btn btn-ghost normal-case text-xl">Guess The Drop</a>
+{% endblock %}
+
 {% block navbar_content %}
     <form action="/join" method="get" class="join">
         <button type="submit" class="btn btn-primary btn-sm normal-case join-item rounded-l-full">Join</button>

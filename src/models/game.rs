@@ -32,9 +32,9 @@ pub struct GameWithJoinedSummary {
     pub reward_message: Option<String>,
     pub total_reward_message: Option<String>,
 
-    pub players_count: i64,
-    pub winners_count: i64,
-    pub winning_points: i32,
+    pub players_count: Option<i64>,
+    pub winners_count: Option<i64>,
+    pub winning_points: Option<i32>,
 
     pub is_winner: Option<bool>,
 }
@@ -52,7 +52,7 @@ pub struct GameWithHostedSummary {
     pub reward_message: Option<String>,
     pub total_reward_message: Option<String>,
 
-    pub players_count: i64,
-    pub winners_count: i64,
-    pub winning_points: i32,
+    pub players_count: Option<i64>,
+    pub winners_count: Option<i64>,
+    pub winning_points: Option<i32>,
 }

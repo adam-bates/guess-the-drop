@@ -16,10 +16,17 @@
 </head>
     <body class="bg-base-200">
         <div class="min-h-screen flex flex-col">
-            <div class="navbar flex flex-row bg-base-100">
-                <div class="flex-1">
+            <div class="navbar flex flex-row bg-base-100 gap-4">
+                {% block navbar_title %}
                     <a href="/" class="btn btn-ghost normal-case text-xl">Guess The Drop</a>
-                </div>
+
+                    {% if user.is_some() %}
+                        <a href="/games" class="link link-ghost no-underline">Games</a>
+                    {% endif %}
+                {% endblock %}
+
+                <div class="flex-1"></div>
+
                 <div class="flex-none gap-2">
                     {% block navbar_content %}
                         <form action="/join" method="get" class="join">
