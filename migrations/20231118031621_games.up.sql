@@ -8,7 +8,9 @@ CREATE TABLE IF NOT EXISTS games (
 
     name VARCHAR(1024) NOT NULL,
     reward_message VARCHAR(1024),
-    total_reward_message VARCHAR(1024)
+    total_reward_message VARCHAR(1024),
+
+    is_locked BOOLEAN NOT NULL
 );
 
 CREATE INDEX idx_games_user_id ON games(user_id);

@@ -76,13 +76,14 @@ pub fn add_routes(router: Router<AppState>) -> Router<AppState> {
 #[template(path = "game-templates.html")]
 struct GameTemplatesTemplate {
     user: User,
+    session: SessionAuth,
     templates: Vec<GameTemplate>,
     can_create: bool,
 }
 
 async fn templates(session: Session, State(state): State<AppState>) -> Result<impl IntoResponse> {
     let sid = utils::session_id(&session)?;
-    let (user, _) = utils::require_user(&state, &sid).await?.split();
+    let (user, session) = utils::require_user(&state, &sid).await?.split();
 
     let game_templates: Vec<GameTemplate> =
         sqlx::query_as("SELECT * FROM game_templates WHERE user_id = ?")
@@ -93,6 +94,7 @@ async fn templates(session: Session, State(state): State<AppState>) -> Result<im
     return Ok(Html(GameTemplatesTemplate {
         can_create: game_templates.len() < MAX_TEMPLATES_PER_USER,
 
+        session,
         user,
         templates: game_templates,
     }));

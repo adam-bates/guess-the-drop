@@ -17,6 +17,8 @@ pub struct Game {
     pub name: String,
     pub reward_message: Option<String>,
     pub total_reward_message: Option<String>,
+
+    pub is_locked: bool,
 }
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Debug, Clone)]
@@ -31,6 +33,8 @@ pub struct GameWithJoinedSummary {
     pub name: String,
     pub reward_message: Option<String>,
     pub total_reward_message: Option<String>,
+
+    pub is_locked: bool,
 
     pub players_count: Option<i64>,
     pub winners_count: Option<i64>,
@@ -51,6 +55,8 @@ pub struct GameWithHostedSummary {
     pub name: String,
     pub reward_message: Option<String>,
     pub total_reward_message: Option<String>,
+
+    pub is_locked: bool,
 
     pub players_count: Option<i64>,
     pub winners_count: Option<i64>,
