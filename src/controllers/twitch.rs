@@ -13,6 +13,7 @@ use axum::{
 };
 use serde::Deserialize;
 use tower_sessions::Session;
+use twitch_api::helix::users::GetUsersRequest;
 use twitch_oauth2::{Scope, TwitchToken, UserTokenBuilder};
 
 pub fn add_routes(router: Router<AppState>) -> Router<AppState> {
@@ -167,6 +168,35 @@ async fn twitch_callback(
         .get_user_token(&http_client, twitch_state, code)
         .await?;
 
+    let logins: &[&twitch_api::types::UserNameRef] = &[&token.login];
+    let request = GetUsersRequest::logins(logins);
+
+    let url = reqwest::Url::parse(&request.get_uri()?.to_string())?;
+
+    use twitch_api::helix::{Request, RequestGet};
+
+    let response = http_client
+        .get(url)
+        .header("Client-ID", token.client_id().as_str())
+        .header("Content-Type", "application/json")
+        .header(
+            reqwest::header::AUTHORIZATION,
+            format!("Bearer {}", token.access_token.secret()),
+        )
+        .send()
+        .await?;
+
+    let response = axum::http::Response::new(response.bytes().await?);
+
+    let uri = request.get_uri()?;
+    let user: twitch_api::helix::Response<_, Vec<twitch_api::helix::users::User>> =
+        GetUsersRequest::parse_response(Some(request), &uri, response)?;
+
+    let username = user
+        .first()
+        .map(|user| user.display_name.to_string())
+        .unwrap_or_else(|| token.login.to_string());
+
     let now_s = SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
         .as_secs();
@@ -180,7 +210,7 @@ async fn twitch_callback(
 
     sqlx::query("INSERT IGNORE INTO users (user_id, username) VALUES (?, ?)")
         .bind(token.user_id.as_str())
-        .bind(token.login.as_str())
+        .bind(username)
         .execute(&state.db)
         .await?;
 

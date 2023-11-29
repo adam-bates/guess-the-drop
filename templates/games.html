@@ -5,47 +5,67 @@
 
     <div class="divider"></div>
 
-    <div class="grid gap-4 md:grid-cols-1 {% if !games_hosted.is_empty() && !games_joined.is_empty() %} lg:grid-cols-2 {% endif %}">
+    <div class="flex flex-col gap-4">
         {% if !games_hosted.is_empty() %}
             <div class="flex flex-col gap-2">
                 <h3 class="text-xl font-bold pl-2">Hosted</h3>
-                <table class="table border-2 border-base-100">
+                <table class="table table-zebra border-2 border-base-100">
                     <thead>
                         <tr>
-                            <th>Status</th>
                             <th>Name</th>
                             <th>Code</th>
-                            <th>Players</th>
-                            <th>Winners</th>
-                            <th>Winning Points</th>
+                            <th>Date</th>
+                            <th>Info</th>
                         </tr>
                     </thead>
 
                     {% for game in games_hosted %}
                         <tbody>
                             <tr>
-                                <td>
-                                    <div class="flex flex-row justify-center">
+                                <td class="align-text-top">
+                                    <div class="flex flex-row items-center gap-2">
                                         {% if game.status == "ACTIVE" %}
                                             <span class="flex w-2 h-2 me-2 bg-accent rounded-full"></span>
                                         {% else %}
                                             <span class="flex w-2 h-2 me-2 bg-base-100 rounded-full dark:bg-gray-700"></span>
                                         {% endif %}
+
+                                        <a href="/games/{{ game.game_code }}" class="btn btn-square btn-sm btn-ghost">
+                                            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" x2="21" y1="14" y2="3"/></svg>
+                                        </a>
+
+                                        <span>{{ game.name }}</span>
                                     </div>
                                 </td>
-                                <td>{{ game.name }}</td>
-                                <td>{{ game.game_code }}</td>
-                                <td>{{ game.players_count.unwrap_or(0) }}</td>
-                                <td>{{ game.winners_count.unwrap_or(0) }}</td>
-                                <td>{{ game.winning_points.unwrap_or(0) }}</td>
+                                <td class="align-text-top">{{ game.game_code }}</td>
+                                <td id="hosted_{{ game.game_code }}" class="align-text-top"></td>
+                                <td>
+                                    <ul>
+                                        <li>{{ game.players_count.unwrap_or(0) }} {% if let Some(1) = game.players_count %} player {% else %} players {% endif %}</li>
+                                        <li>{{ game.winners_count.unwrap_or(0) }} {% if let Some(1) = game.winners_count %} winner {% else %} winners {% endif %}</li>
+
+                                        {% if let Some(total_drops) = game.total_drops %}
+                                            {% if let 0 = total_drops %}
+                                            {% else %}
+                                                {% if let 1 = total_drops %}
+                                                    <li>There was 1 drop</li>
+                                                {% else %}
+                                                    <li>There were {{ total_drops }} drops</li>
+                                                {% endif %}
+
+                                                {% if let Some(winning_points) = game.winning_points %}
+                                                    <li>Winner got {{ game.winning_points.unwrap() }} / {{ total_drops }} correct guesses</li>
+                                                {% endif %}
+                                            {% endif %}
+                                        {% endif %}
+                                    </ul>
+                                </td>
                             </tr>
                         </tbody>
                     {% endfor %}
 
                     <tfoot>
                         <tr>
-                            <th></th>
-                            <th></th>
                             <th></th>
                             <th></th>
                             <th></th>
@@ -59,45 +79,73 @@
         {% if !games_joined.is_empty() %}
             <div class="flex flex-col gap-2">
                 <h3 class="text-xl font-bold pl-2">Joined</h3>
-                <table class="table border-2 border-base-100">
+                <table class="table table-zebra border-2 border-base-100">
                     <thead>
                         <tr>
-                            <th>Status</th>
-                            <th>Did you win?</th>
                             <th>Name</th>
                             <th>Code</th>
-                            <th>Players</th>
-                            <th>Winners</th>
-                            <th>Winning Points</th>
+                            <th>Host</th>
+                            <th>Date</th>
+                            <th>Info</th>
                         </tr>
                     </thead>
 
                     {% for game in games_joined %}
                         <tbody>
                             <tr>
-                                <td>
-                                    <div class="flex flex-row justify-center">
+                                <td class="align-text-top">
+                                    <div class="flex flex-row items-center gap-2">
                                         {% if game.status == "ACTIVE" %}
                                             <span class="flex w-2 h-2 me-2 bg-accent rounded-full"></span>
                                         {% else %}
                                             <span class="flex w-2 h-2 me-2 bg-base-100 rounded-full dark:bg-gray-700"></span>
                                         {% endif %}
+
+                                        <a href="/games/{{ game.game_code }}" class="btn btn-square btn-sm btn-ghost">
+                                            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" x2="21" y1="14" y2="3"/></svg>
+                                        </a>
+
+                                        <span>{{ game.name }}</span>
                                     </div>
                                 </td>
-                                <td>{{ game.is_winner.unwrap_or(false) }}</td>
-                                <td>{{ game.name }}</td>
-                                <td>{{ game.game_code }}</td>
-                                <td>{{ game.players_count.unwrap_or(0) }}</td>
-                                <td>{{ game.winners_count.unwrap_or(0) }}</td>
-                                <td>{{ game.winning_points.unwrap_or(0) }}</td>
+                                <td class="align-text-top">{{ game.game_code }}</td>
+                                <td class="align-text-top">
+                                    <span>{{ game.host }}</span>
+                                </td>
+                                <td id="joined_{{ game.game_code }}" class="align-text-top"></td>
+                                <td>
+                                    <ul>
+                                        {% if let Some(true) = game.is_winner %}
+                                            <li>You won this game!</li>
+                                        {% endif %}
+
+                                        <li>You have {{ game.points }} points</li>
+
+                                        <li>{{ game.players_count.unwrap_or(0) }} {% if let Some(1) = game.players_count %} player {% else %} players {% endif %}</li>
+
+                                        {% if let Some(total_drops) = game.total_drops %}
+                                            {% if let 0 = total_drops %}
+                                            {% else %}
+                                                {% if let 1 = total_drops %}
+                                                    <li>There was 1 drop</li>
+                                                {% else %}
+                                                    <li>There were {{ total_drops }} drops</li>
+                                                {% endif %}
+
+                                                {% if let Some(winning_points) = game.winning_points %}
+                                                    <li>Winner got {{ game.winning_points.unwrap() }} / {{ total_drops }} correct guesses</li>
+                                                {% endif %}
+                                            {% endif %}
+                                        {% endif %}
+                                    </ul>
+                                </td>
+                                
                             </tr>
                         </tbody>
                     {% endfor %}
 
                     <tfoot>
                         <tr>
-                            <th></th>
-                            <th></th>
                             <th></th>
                             <th></th>
                             <th></th>
@@ -111,3 +159,14 @@
     </div>
 {% endblock %}
 
+{% block scripts %}
+    <script type="text/javascript">
+        {% for game in games_hosted %}
+            document.getElementById("hosted_{{ game.game_code }}").innerText = new Date({{ game.created_at * 1000 }}).toLocaleString();
+        {% endfor %}
+
+        {% for game in games_joined %}
+            document.getElementById("joined_{{ game.game_code }}").innerText = new Date({{ game.created_at * 1000 }}).toLocaleString();
+        {% endfor %}
+    </script>
+{% endblock %}

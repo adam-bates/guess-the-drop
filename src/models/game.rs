@@ -38,9 +38,13 @@ pub struct GameWithJoinedSummary {
 
     pub players_count: Option<i64>,
     pub winners_count: Option<i64>,
+
     pub winning_points: Option<i32>,
+    pub total_drops: Option<i32>,
 
     pub is_winner: Option<bool>,
+    pub points: i32,
+    pub host: String,
 }
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Debug, Clone)]
@@ -60,5 +64,7 @@ pub struct GameWithHostedSummary {
 
     pub players_count: Option<i64>,
     pub winners_count: Option<i64>,
+
     pub winning_points: Option<i32>,
+    pub total_drops: Option<i32>,
 }

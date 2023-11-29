@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    time::SystemTime,
-};
+use std::{collections::HashSet, time::SystemTime};
 
 use super::*;
 
@@ -220,6 +217,11 @@ LEFT OUTER JOIN (
 	GROUP BY gp_game_code
 ) AS players_counts ON players_counts.gp_game_code = games.game_code
 LEFT OUTER JOIN (
+	SELECT game_code AS gp2_game_code, points
+	FROM game_players
+    WHERE user_id = ?
+) AS points ON points.gp2_game_code = games.game_code
+LEFT OUTER JOIN (
 	SELECT game_winners.game_code AS gw_game_code, COUNT(*) AS winners_count, MAX(points) AS winning_points
 	FROM game_winners
 		INNER JOIN game_players ON game_players.game_player_id = game_winners.game_player_id
@@ -232,6 +234,15 @@ LEFT OUTER JOIN (
 	WHERE game_players.user_id = ?
     GROUP BY gw_game_code2
 ) AS is_winners ON is_winners.gw_game_code2 = games.game_code
+LEFT OUTER JOIN (
+    SELECT user_id as u_user_id, username AS host
+    FROM users
+) AS hosts ON hosts.u_user_id = games.user_id
+LEFT OUTER JOIN (
+    SELECT game_code as gio_game_code, COUNT(*) AS total_drops
+    FROM game_item_outcomes
+    GROUP BY gio_game_code
+) AS total_drops ON total_drops.gio_game_code = games.game_code
 WHERE games.game_code IN (
 	SELECT game_code
     FROM game_players
@@ -240,6 +251,7 @@ WHERE games.game_code IN (
 ORDER BY status ASC, created_at DESC
         "#,
     )
+    .bind(&user.user_id)
     .bind(&user.user_id)
     .bind(&user.user_id)
     .fetch_all(&state.db)
@@ -260,6 +272,11 @@ LEFT OUTER JOIN (
 		INNER JOIN game_players ON game_players.game_player_id = game_winners.game_player_id
 	GROUP BY gw_game_code
 ) AS winners_counts ON winners_counts.gw_game_code = games.game_code
+LEFT OUTER JOIN (
+    SELECT game_code as gio_game_code, COUNT(*) AS total_drops
+    FROM game_item_outcomes
+    GROUP BY gio_game_code
+) AS total_drops ON total_drops.gio_game_code = games.game_code
 WHERE games.user_id = ?
 ORDER BY status ASC, created_at DESC
         "#,
