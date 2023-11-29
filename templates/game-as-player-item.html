@@ -1,0 +1,91 @@
+<div id="card-{{ item.game_item_id }}" class="card bg-base-100 shadow-xl">
+    <div class="card-body flex flex-col gap-4">
+        <h2 class="card-title">{{ item.name }}</h2>
+        {% if let Some(guess) = guess %}
+            {% if guess.item_id == item.game_item_id %}
+                <p>You guessed this item.</p>
+            {% endif %}
+        {% endif %}
+
+        <div class="card-actions flex flex-row justify-end">
+             <div>
+                {% if let Some(guess) = guess %}
+                    {% if guess.item_id == item.game_item_id %}
+                        <button type="button" {% if game.is_locked %} disabled {% endif %} onclick="confirm_{{ item.game_item_id }}.showModal()" class="btn btn-error btn-sm text-black">
+                            Undo
+                            <svg fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+                        </button>
+
+                        <dialog id="confirm_{{ item.game_item_id }}" class="modal">
+                            <div class="modal-box">
+                                <h3 class="font-bold text-lg">Confirm</h3>
+                                <p class="py-4">Undo guess?</p>
+                                <div class="modal-action flex flex-row justify-end gap-2">
+                                    <form method="dialog">
+                                        <button class="btn btn-ghost">Cancel</button>
+                                    </form>
+
+                                    <button hx-put="/games/{{ game.game_code }}/items/{{ item.game_item_id }}/x/undo-guess" hx-target="#game_board" class="btn btn-primary">Undo</button>
+                                </div>
+                            </div>
+
+                            <form method="dialog" class="modal-backdrop">
+                                <button>close</button>
+                            </form>
+                        </dialog>
+                    {% else %}
+                        <button type="button" {% if game.is_locked %} disabled {% endif %} onclick="confirm_{{ item.game_item_id }}.showModal()" class="btn btn-primary btn-sm text-black">
+                            Change Guess
+                            <svg fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+                        </button>
+
+                        <dialog id="confirm_{{ item.game_item_id }}" class="modal">
+                            <div class="modal-box">
+                                <h3 class="font-bold text-lg">Confirm</h3>
+                                <p class="py-4">Change guess to: <em>{{ item.name }}</em></p>
+                                <div class="modal-action flex flex-row justify-end gap-2">
+                                    <form method="dialog">
+                                        <button class="btn btn-ghost">Cancel</button>
+                                    </form>
+
+                                    <button hx-put="/games/{{ game.game_code }}/items/{{ item.game_item_id }}/x/guess" hx-target="#game_board" class="btn btn-primary">Confirm</button>
+                                </div>
+                            </div>
+
+                            <form method="dialog" class="modal-backdrop">
+                                <button>close</button>
+                            </form>
+                        </dialog>
+                    {% endif %}
+                {% else %}
+                    <button type="button" {% if game.is_locked %} disabled {% endif %} onclick="confirm_{{ item.game_item_id }}.showModal()" class="btn btn-primary btn-sm text-black">
+                        Guess
+                        <svg fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+                    </button>
+
+                    <dialog id="confirm_{{ item.game_item_id }}" class="modal">
+                        <div class="modal-box">
+                            <h3 class="font-bold text-lg">Confirm</h3>
+                            <p class="py-4">Guess: <em>{{ item.name }}</em></p>
+                            <div class="modal-action flex flex-row justify-end gap-2">
+                                <form method="dialog">
+                                    <button class="btn btn-ghost">Cancel</button>
+                                </form>
+
+                                <button hx-put="/games/{{ game.game_code }}/items/{{ item.game_item_id }}/x/guess" hx-target="#game_board" class="btn btn-primary">Confirm</button>
+                            </div>
+                        </div>
+
+                        <form method="dialog" class="modal-backdrop">
+                            <button>close</button>
+                        </form>
+                    </dialog>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% if let Some(image) = item.image %}
+        <figure><img src="{{ img_base_uri }}/{{ image }}" class="min-w-[50%] min-h-[50%]" /></figure>
+    {% endif %}
+</div>

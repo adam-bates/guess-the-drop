@@ -1,12 +1,15 @@
-use std::time::SystemTime;
+use std::{
+    collections::{HashMap, HashSet},
+    time::SystemTime,
+};
 
 use super::*;
 
 use crate::{
     models::{
-        Game, GameItem, GameItemOutcome, GameItemTemplate, GamePlayer, GameTemplate,
-        GameWithHostedSummary, GameWithJoinedSummary, User, GAME_STATUS_ACTIVE,
-        GAME_STATUS_FINISHED,
+        Game, GameItem, GameItemOutcome, GameItemTemplate, GameItemWithGuessCount, GamePlayer,
+        GameTemplate, GameWithHostedSummary, GameWithJoinedSummary, PlayerGuess, User,
+        GAME_STATUS_ACTIVE, GAME_STATUS_FINISHED,
     },
     prelude::*,
 };
@@ -40,6 +43,10 @@ pub fn add_routes(router: Router<AppState>) -> Router<AppState> {
         .route(
             "/games/:game_code/items/:game_item_id/x/choose",
             put(game_x_choose_item),
+        )
+        .route(
+            "/games/:game_code/items/:game_item_id/x/guess",
+            put(game_x_guess_item),
         );
 }
 
@@ -119,10 +126,30 @@ async fn post_game(
             .fetch_all(&state.db)
             .await?;
 
-    const GAME_CODE_CHARS: [char; 16] = [
-        '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'a', 'b', 'c', 'd', 'e', 'f',
-    ];
-    let game_code = nanoid!(6, &GAME_CODE_CHARS);
+    let game_code = {
+        let mut game_code;
+
+        // Keep searching until unique code is found or request times out
+        loop {
+            const GAME_CODE_LENGTH: usize = 6;
+            const GAME_CODE_CHARS: [char; 16] = [
+                '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'a', 'b', 'c', 'd', 'e', 'f',
+            ];
+
+            game_code = nanoid!(GAME_CODE_LENGTH, &GAME_CODE_CHARS);
+
+            let existing: Option<Game> = sqlx::query_as("SELECT * FROM games WHERE game_code = ?")
+                .bind(&game_code)
+                .fetch_optional(&state.db)
+                .await?;
+
+            if existing.is_none() {
+                break;
+            }
+        }
+
+        game_code
+    };
 
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)?
@@ -210,6 +237,7 @@ WHERE games.game_code IN (
     FROM game_players
     WHERE user_id = ?
 )
+ORDER BY status ASC, created_at DESC
         "#,
     )
     .bind(&user.user_id)
@@ -233,6 +261,7 @@ LEFT OUTER JOIN (
 	GROUP BY gw_game_code
 ) AS winners_counts ON winners_counts.gw_game_code = games.game_code
 WHERE games.user_id = ?
+ORDER BY status ASC, created_at DESC
         "#,
     )
     .bind(&user.user_id)
@@ -251,7 +280,8 @@ WHERE games.user_id = ?
 #[template(path = "game-as-player.html")]
 struct GameAsPlayerTemplate {
     game: Game,
-    items: Vec<GameItem>,
+    guess: Option<PlayerGuess>,
+    items: Vec<GameItemWithGuessCount>,
     user: User,
     player: GamePlayer,
     img_base_uri: String,
@@ -261,7 +291,26 @@ struct GameAsPlayerTemplate {
 #[template(path = "game-as-host.html")]
 struct GameAsHostTemplate {
     game: Game,
-    items: Vec<GameItem>,
+    items: Vec<GameItemWithGuessCount>,
+    user: User,
+    img_base_uri: String,
+}
+
+#[derive(Template, Clone)]
+#[template(path = "finished-game-as-player.html")]
+struct FinishedGameAsPlayerTemplate {
+    game: Game,
+    items: Vec<GameItemWithGuessCount>,
+    user: User,
+    player: GamePlayer,
+    img_base_uri: String,
+}
+
+#[derive(Template, Clone)]
+#[template(path = "finished-game-as-host.html")]
+struct FinishedGameAsHostTemplate {
+    game: Game,
+    items: Vec<GameItemWithGuessCount>,
     user: User,
     img_base_uri: String,
 }
@@ -293,10 +342,26 @@ async fn game(
         return Ok(Redirect::to("/").into_response());
     };
 
-    let items: Vec<GameItem> = sqlx::query_as("SELECT * FROM game_items WHERE game_code = ?")
-        .bind(&game_code)
-        .fetch_all(&state.db)
-        .await?;
+    let items: Vec<GameItemWithGuessCount> = sqlx::query_as(
+        r#"
+SELECT *
+FROM game_items
+    LEFT OUTER JOIN (
+        SELECT item_id, COUNT(*) AS guess_count
+        FROM player_guesses
+        WHERE
+            game_code = ? AND
+            outcome_id IS NULL
+        GROUP BY item_id
+    ) AS guess_counts ON guess_counts.item_id = game_items.game_item_id
+WHERE
+    game_code = ?
+            "#,
+    )
+    .bind(&game_code)
+    .bind(&game_code)
+    .fetch_all(&state.db)
+    .await?;
 
     if game.status != GAME_STATUS_ACTIVE {
         // TODO: Include all users and winners if host (?)
@@ -323,7 +388,14 @@ async fn game(
             return Ok(Redirect::to("/").into_response());
         };
 
-        compile_error!();
+        return Ok(Html(FinishedGameAsPlayerTemplate {
+            img_base_uri: state.cfg.r2_bucket_public_url.clone(),
+            game,
+            items,
+            user,
+            player,
+        })
+        .into_response());
     }
 
     if game.user_id == user.user_id {
@@ -343,8 +415,14 @@ async fn game(
             .fetch_optional(&state.db)
             .await?;
 
-    let player = if let Some(player) = player {
-        player
+    let (player, guess) = if let Some(player) = player {
+        let guess: Option<PlayerGuess> = sqlx::query_as("SELECT * FROM player_guesses WHERE game_code = ? AND player_id = ? AND outcome_id IS NULL LIMIT 1")
+            .bind(&game_code)
+            .bind(&player.game_player_id)
+            .fetch_optional(&state.db)
+            .await?;
+
+        (player, guess)
     } else {
         sqlx::query("INSERT INTO game_players (game_code, user_id, points) VALUES (?, ?, 0)")
             .bind(&game_code)
@@ -352,16 +430,20 @@ async fn game(
             .execute(&state.db)
             .await?;
 
-        sqlx::query_as("SELECT * FROM game_players WHERE game_code = ? AND user_id = ?")
-            .bind(&game_code)
-            .bind(&user.user_id)
-            .fetch_one(&state.db)
-            .await?
+        (
+            sqlx::query_as("SELECT * FROM game_players WHERE game_code = ? AND user_id = ?")
+                .bind(&game_code)
+                .bind(&user.user_id)
+                .fetch_one(&state.db)
+                .await?,
+            None,
+        )
     };
 
     return Ok(Html(GameAsPlayerTemplate {
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
         game,
+        guess,
         items,
         user,
         player,
@@ -373,7 +455,7 @@ async fn game(
 #[template(path = "game-as-host-board.html")]
 struct GameAsHostBoardTemplate {
     game: Game,
-    items: Vec<GameItem>,
+    items: Vec<GameItemWithGuessCount>,
     user: User,
     img_base_uri: String,
 }
@@ -411,10 +493,26 @@ async fn game_x_lock(
         game.is_locked = true;
     }
 
-    let items: Vec<GameItem> = sqlx::query_as("SELECT * FROM game_items WHERE game_code = ?")
-        .bind(&game_code)
-        .fetch_all(&state.db)
-        .await?;
+    let items: Vec<GameItemWithGuessCount> = sqlx::query_as(
+        r#"
+SELECT *
+FROM game_items
+    LEFT OUTER JOIN (
+        SELECT item_id, COUNT(*) AS guess_count
+        FROM player_guesses
+        WHERE
+            game_code = ? AND
+            outcome_id IS NULL
+        GROUP BY item_id
+    ) AS guess_counts ON guess_counts.item_id = game_items.game_item_id
+WHERE
+    game_code = ?
+            "#,
+    )
+    .bind(&game_code)
+    .bind(&game_code)
+    .fetch_all(&state.db)
+    .await?;
 
     return Ok(Html(GameAsHostBoardTemplate {
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
@@ -458,10 +556,26 @@ async fn game_x_unlock(
         game.is_locked = false;
     }
 
-    let items: Vec<GameItem> = sqlx::query_as("SELECT * FROM game_items WHERE game_code = ?")
-        .bind(&game_code)
-        .fetch_all(&state.db)
-        .await?;
+    let items: Vec<GameItemWithGuessCount> = sqlx::query_as(
+        r#"
+SELECT *
+FROM game_items
+    LEFT OUTER JOIN (
+        SELECT item_id, COUNT(*) AS guess_count
+        FROM player_guesses
+        WHERE
+            game_code = ? AND
+            outcome_id IS NULL
+        GROUP BY item_id
+    ) AS guess_counts ON guess_counts.item_id = game_items.game_item_id
+WHERE
+    game_code = ?
+            "#,
+    )
+    .bind(&game_code)
+    .bind(&game_code)
+    .fetch_all(&state.db)
+    .await?;
 
     return Ok(Html(GameAsHostBoardTemplate {
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
@@ -525,12 +639,44 @@ async fn game_x_choose_item(
     .fetch_one(&state.db)
     .await?;
 
-    sqlx::query("UPDATE player_guesses SET outcome_id = ? WHERE game_code = ? AND item_id = ? AND outcome_id IS NULL")
-        .bind(&outcome.outcome_id)
-        .bind(&game_code)
-        .bind(&game_item_id)
-        .execute(&state.db)
-        .await?;
+    let correct_guesses: Vec<PlayerGuess> = sqlx::query_as(
+        "SELECT * FROM player_guesses WHERE game_code = ? AND item_id = ? AND outcome_id IS NULL",
+    )
+    .bind(&game_code)
+    .bind(&game_item_id)
+    .fetch_all(&state.db)
+    .await?;
+
+    if !correct_guesses.is_empty() {
+        let correct_guesses: HashSet<u64> =
+            correct_guesses.into_iter().map(|g| g.player_id).collect();
+
+        let values = correct_guesses
+            .iter()
+            .map(|_| "?")
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let q = format!(
+            "UPDATE game_players SET points = points + 1 WHERE game_player_id IN ({values})"
+        );
+
+        let mut query = sqlx::query(&q);
+
+        for id in correct_guesses {
+            query = query.bind(id);
+        }
+
+        query.execute(&state.db).await?;
+    }
+
+    sqlx::query(
+        "UPDATE player_guesses SET outcome_id = ? WHERE game_code = ? AND outcome_id IS NULL",
+    )
+    .bind(&outcome.outcome_id)
+    .bind(&game_code)
+    .execute(&state.db)
+    .await?;
 
     sqlx::query("UPDATE game_items SET enabled = false WHERE game_code = ? AND game_item_id = ?")
         .bind(&game_code)
@@ -538,10 +684,26 @@ async fn game_x_choose_item(
         .execute(&state.db)
         .await?;
 
-    let items: Vec<GameItem> = sqlx::query_as("SELECT * FROM game_items WHERE game_code = ?")
-        .bind(&game_code)
-        .fetch_all(&state.db)
-        .await?;
+    let items: Vec<GameItemWithGuessCount> = sqlx::query_as(
+        r#"
+SELECT *
+FROM game_items
+    LEFT OUTER JOIN (
+        SELECT item_id, COUNT(*) AS guess_count
+        FROM player_guesses
+        WHERE
+            game_code = ? AND
+            outcome_id IS NULL
+        GROUP BY item_id
+    ) AS guess_counts ON guess_counts.item_id = game_items.game_item_id
+WHERE
+    game_code = ?
+            "#,
+    )
+    .bind(&game_code)
+    .bind(&game_code)
+    .fetch_all(&state.db)
+    .await?;
 
     if game.is_locked {
         sqlx::query("UPDATE games SET is_locked = false WHERE game_code = ?")
@@ -561,10 +723,118 @@ async fn game_x_choose_item(
 }
 
 #[derive(Template, Clone)]
+#[template(path = "game-as-player-board.html")]
+struct GameAsPlayerBoardTemplate {
+    game: Game,
+    guess: Option<PlayerGuess>,
+    items: Vec<GameItem>,
+    user: User,
+    img_base_uri: String,
+}
+
+async fn game_x_guess_item(
+    Path((game_code, game_item_id)): Path<(String, String)>,
+    session: Session,
+    State(state): State<AppState>,
+) -> Result<Response> {
+    let session_id = utils::session_id(&session)?;
+    let (user, _) = utils::require_user(&state, &session_id).await?.split();
+
+    if game_code.trim().is_empty() {
+        return Ok(Redirect::to("/").into_response());
+    }
+    let game_code = game_code.to_lowercase();
+
+    let game: Option<Game> = sqlx::query_as(
+        "SELECT * FROM games WHERE game_code = ? AND user_id != ? AND status = 'ACTIVE' LIMIT 1",
+    )
+    .bind(&game_code)
+    .bind(&user.user_id)
+    .fetch_optional(&state.db)
+    .await?;
+
+    let Some(game) = game else {
+        return Ok(Redirect::to("/").into_response());
+    };
+
+    let game_item: Option<GameItem> =
+        sqlx::query_as("SELECT * FROM game_items WHERE game_code = ? AND game_item_id = ? LIMIT 1")
+            .bind(&game_code)
+            .bind(&game_item_id)
+            .fetch_optional(&state.db)
+            .await?;
+
+    let Some(game_item) = game_item else {
+        return Ok(Redirect::to("/").into_response());
+    };
+
+    let game_player: Option<GamePlayer> =
+        sqlx::query_as("SELECT * FROM game_players WHERE game_code = ? AND user_id = ? LIMIT 1")
+            .bind(&game_code)
+            .bind(&user.user_id)
+            .fetch_optional(&state.db)
+            .await?;
+
+    let Some(game_player) = game_player else {
+        return Ok(Redirect::to("/").into_response());
+    };
+
+    let guess: Option<PlayerGuess> = sqlx::query_as("SELECT * FROM player_guesses WHERE game_code = ? AND player_id = ? AND outcome_id IS NULL LIMIT 1")
+        .bind(&game_code)
+        .bind(&game_player.game_player_id)
+        .fetch_optional(&state.db)
+        .await?;
+
+    let guess = if let Some(mut guess) = guess {
+        sqlx::query("UPDATE player_guesses SET item_id = ? WHERE game_code = ? AND player_id = ? AND outcome_id IS NULL LIMIT 1")
+            .bind(&game_item.game_item_id)
+            .bind(&game_code)
+            .bind(&game_player.game_player_id)
+            .execute(&state.db)
+            .await?;
+
+        guess.item_id = game_item.game_item_id;
+
+        guess
+    } else {
+        sqlx::query("INSERT INTO player_guesses (game_code, player_id, item_id, outcome_id) VALUES (?, ?, ?, ?)")
+            .bind(&game_code)
+            .bind(&game_player.game_player_id)
+            .bind(&game_item.game_item_id)
+            .bind(None as Option<u64>)
+            .execute(&state.db)
+            .await?;
+
+        let guess: PlayerGuess = sqlx::query_as("SELECT * FROM player_guesses WHERE game_code = ? AND player_id = ? AND item_id = ? AND outcome_id IS NULL LIMIT 1")
+            .bind(&game_code)
+            .bind(&game_player.game_player_id)
+            .bind(&game_item.game_item_id)
+            .fetch_one(&state.db)
+            .await?;
+
+        guess
+    };
+
+    let items = sqlx::query_as("SELECT * FROM game_items WHERE game_code = ?")
+        .bind(&game_code)
+        .fetch_all(&state.db)
+        .await?;
+
+    return Ok(Html(GameAsPlayerBoardTemplate {
+        game,
+        guess: Some(guess),
+        user,
+        items,
+        img_base_uri: state.cfg.r2_bucket_public_url.clone(),
+    })
+    .into_response());
+}
+
+#[derive(Template, Clone)]
 #[template(path = "game-as-host-item.html")]
 struct GameAsHostItemTemplate {
     game: Game,
-    item: GameItem,
+    item: GameItemWithGuessCount,
     img_base_uri: String,
 }
 
@@ -593,12 +863,31 @@ async fn game_x_enable_item(
         return Ok(Redirect::to("/").into_response());
     };
 
-    let game_item: Option<GameItem> =
-        sqlx::query_as("SELECT * FROM game_items WHERE game_code = ? AND game_item_id = ? LIMIT 1")
-            .bind(&game_code)
-            .bind(&game_item_id)
-            .fetch_optional(&state.db)
-            .await?;
+    let game_item: Option<GameItemWithGuessCount> = sqlx::query_as(
+        r#"
+SELECT *
+FROM game_items
+    LEFT OUTER JOIN (
+        SELECT item_id, COUNT(*) AS guess_count
+        FROM player_guesses
+        WHERE
+            game_code = ? AND
+            outcome_id IS NULL
+        GROUP BY item_id
+        HAVING item_id = ?
+    ) AS guess_counts ON guess_counts.item_id = game_items.game_item_id
+WHERE
+    game_code = ? AND
+    game_item_id = ?
+LIMIT 1
+            "#,
+    )
+    .bind(&game_code)
+    .bind(&game_item_id)
+    .bind(&game_code)
+    .bind(&game_item_id)
+    .fetch_optional(&state.db)
+    .await?;
 
     let Some(mut game_item) = game_item else {
         return Ok(Redirect::to("/").into_response());
@@ -649,12 +938,31 @@ async fn game_x_disable_item(
         return Ok(Redirect::to("/").into_response());
     };
 
-    let game_item: Option<GameItem> =
-        sqlx::query_as("SELECT * FROM game_items WHERE game_code = ? AND game_item_id = ? LIMIT 1")
-            .bind(&game_code)
-            .bind(&game_item_id)
-            .fetch_optional(&state.db)
-            .await?;
+    let game_item: Option<GameItemWithGuessCount> = sqlx::query_as(
+        r#"
+SELECT *
+FROM game_items
+    LEFT OUTER JOIN (
+        SELECT item_id, COUNT(*) AS guess_count
+        FROM player_guesses
+        WHERE
+            game_code = ? AND
+            outcome_id IS NULL
+        GROUP BY item_id
+        HAVING item_id = ?
+    ) AS guess_counts ON guess_counts.item_id = game_items.game_item_id
+WHERE
+    game_code = ? AND
+    game_item_id = ?
+LIMIT 1
+            "#,
+    )
+    .bind(&game_code)
+    .bind(&game_item_id)
+    .bind(&game_code)
+    .bind(&game_item_id)
+    .fetch_optional(&state.db)
+    .await?;
 
     let Some(mut game_item) = game_item else {
         return Ok(Redirect::to("/").into_response());
@@ -717,56 +1025,40 @@ async fn finish_game(
         .await?;
     game.status = GAME_STATUS_FINISHED.to_string();
 
-    let players: Vec<(u64, i32)> = sqlx::query_as(
+    let winners: Vec<GamePlayer> = sqlx::query_as(
         r#"
-SELECT game_players.game_player_id, COUNT(*) AS points
-FROM player_guesses
-    INNER JOIN game_item_outcomes ON player_guesses.outcome_id = game_item_outcomes.outcome_id
-    INNER JOIN game_players ON player_guesses.player_id = game_players.game_player_id
+SELECT *
+FROM game_players
 WHERE
-	player_guesses.game_code = ? AND
-    game_item_outcomes.game_code = ? AND
-	game_players.game_code = ? AND
-	player_guesses.item_id = game_item_outcomes.item_id
-GROUP BY player_guesses.player_id
-ORDER BY points DESC
+    game_players.game_code = ? AND
+    points != 0 AND
+    points = (
+        SELECT MAX(points)
+        FROM game_players
+        WHERE game_players.game_code = ?
+    )
 "#,
     )
-    .bind(&game_code)
     .bind(&game_code)
     .bind(&game_code)
     .fetch_all(&state.db)
     .await?;
 
-    if !players.is_empty() {
-        let max_points = players[0].1;
+    if !winners.is_empty() {
+        let values = winners
+            .iter()
+            .map(|_| "(?, ?)")
+            .collect::<Vec<_>>()
+            .join(", ");
 
-        let mut winners = vec![];
+        let q = format!("INSERT INTO game_winners (game_player_id, game_code) VALUES {values}");
+        let mut query = sqlx::query(&q);
 
-        for (game_player_id, points) in players {
-            if points < max_points {
-                break;
-            }
-
-            winners.push(game_player_id);
+        for winner in winners {
+            query = query.bind(winner.game_player_id).bind(&game_code);
         }
 
-        if !winners.is_empty() {
-            let values = winners
-                .iter()
-                .map(|_| "(?, ?)")
-                .collect::<Vec<_>>()
-                .join(", ");
-
-            let q = format!("INSERT INTO game_winners (game_player_id, game_code) VALUES {values}");
-            let mut query = sqlx::query(&q);
-
-            for game_player_id in winners {
-                query = query.bind(game_player_id).bind(&game_code);
-            }
-
-            query.execute(&state.db).await?;
-        }
+        query.execute(&state.db).await?;
     }
 
     return Ok(Redirect::to(&format!("/games/{game_code}")).into_response());

@@ -1,0 +1,168 @@
+{
+  "db_name": "MySQL",
+  "query": "SELECT *\nFROM games\nLEFT OUTER JOIN (\n\tSELECT game_players.game_code AS gp_game_code, COUNT(*) AS players_count\n\tFROM game_players\n\tGROUP BY gp_game_code\n) AS players_counts ON players_counts.gp_game_code = games.game_code\nLEFT OUTER JOIN (\n\tSELECT game_winners.game_code AS gw_game_code, COUNT(*) AS winners_count, MAX(points) AS winning_points\n\tFROM game_winners\n\t\tINNER JOIN game_players ON game_players.game_player_id = game_winners.game_player_id\n\tGROUP BY gw_game_code\n) AS winners_counts ON winners_counts.gw_game_code = games.game_code\nWHERE games.user_id = ?\nORDER BY status ASC, created_at DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "game_code",
+        "type_info": {
+          "type": "VarString",
+          "flags": "NOT_NULL | PRIMARY_KEY | NO_DEFAULT_VALUE",
+          "char_set": 255,
+          "max_size": 512
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": {
+          "type": "VarString",
+          "flags": "NOT_NULL | MULTIPLE_KEY | NO_DEFAULT_VALUE",
+          "char_set": 255,
+          "max_size": 512
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "status",
+        "type_info": {
+          "type": "VarString",
+          "flags": "NOT_NULL | NO_DEFAULT_VALUE",
+          "char_set": 255,
+          "max_size": 512
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": {
+          "type": "LongLong",
+          "flags": "NOT_NULL | UNSIGNED | NO_DEFAULT_VALUE | NUM",
+          "char_set": 63,
+          "max_size": 20
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "active_at",
+        "type_info": {
+          "type": "LongLong",
+          "flags": "NOT_NULL | UNSIGNED | NO_DEFAULT_VALUE | NUM",
+          "char_set": 63,
+          "max_size": 20
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "name",
+        "type_info": {
+          "type": "VarString",
+          "flags": "NOT_NULL | NO_DEFAULT_VALUE",
+          "char_set": 255,
+          "max_size": 4096
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "reward_message",
+        "type_info": {
+          "type": "VarString",
+          "flags": "",
+          "char_set": 255,
+          "max_size": 4096
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "total_reward_message",
+        "type_info": {
+          "type": "VarString",
+          "flags": "",
+          "char_set": 255,
+          "max_size": 4096
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "is_locked",
+        "type_info": {
+          "type": "Tiny",
+          "flags": "NOT_NULL | NO_DEFAULT_VALUE | NUM",
+          "char_set": 63,
+          "max_size": 1
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "gp_game_code",
+        "type_info": {
+          "type": "VarString",
+          "flags": "NO_DEFAULT_VALUE",
+          "char_set": 255,
+          "max_size": 512
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "players_count",
+        "type_info": {
+          "type": "LongLong",
+          "flags": "NUM",
+          "char_set": 63,
+          "max_size": 21
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "gw_game_code",
+        "type_info": {
+          "type": "VarString",
+          "flags": "NO_DEFAULT_VALUE",
+          "char_set": 255,
+          "max_size": 512
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "winners_count",
+        "type_info": {
+          "type": "LongLong",
+          "flags": "NUM",
+          "char_set": 63,
+          "max_size": 21
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "winning_points",
+        "type_info": {
+          "type": "Long",
+          "flags": "NO_DEFAULT_VALUE | NUM",
+          "char_set": 63,
+          "max_size": 11
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "624c6c239770291414295119bac14a7a015fc0fd2660a7b877ac9229947bc4b9"
+}

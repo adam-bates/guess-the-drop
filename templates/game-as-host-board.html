@@ -4,14 +4,14 @@
             <button hx-put="/games/{{ game.game_code }}/x/unlock" hx-target="#game_board" class="btn btn-accent btn-outline btn-sm">Unlock</button>
             <div></div>
             <svg fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><rect height="11" rx="2" ry="2" width="18" x="3" y="11"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            <h2 class="text-xl">Guesses are locked</h2>
+            <h2 class="text-xl">Guesses are locked in</h2>
         </div>
     {% else %}
         <div class="flex flex-row gap-2 items-center text-accent">
             <button hx-put="/games/{{ game.game_code }}/x/lock" hx-target="#game_board" class="btn btn-error btn-outline btn-sm">Lock</button>
             <div></div>
             <svg viewBox="0 0 24 24" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" width="24" xmlns="http://www.w3.org/2000/svg"><rect height="10" rx="2" ry="2" width="16" x="4" y="12"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>
-            <h2 class="text-xl">Guesses are unlocked</h2>
+            <h2 class="text-xl">Guesses are open</h2>
         </div>
     {% endif %}
 </div>
@@ -35,7 +35,9 @@
                         <button class="btn btn-ghost">Cancel</button>
                     </form>
 
-                    <button hx-post="/games/{{ game.game_code }}/finish" hx-target="#game_board" class="btn btn-error">End Game!</button>
+                    <form action="/games/{{ game.game_code }}/finish" method="POST">
+                        <button class="btn btn-error">End Game!</button>
+                    </form>
                 </div>
             </div>
 

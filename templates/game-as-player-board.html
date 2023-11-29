@@ -1,0 +1,19 @@
+{% if game.is_locked %}
+    <div class="flex flex-row gap-2 items-center text-error">
+        <svg fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><rect height="11" rx="2" ry="2" width="18" x="3" y="11"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <h2 class="text-xl">Guesses are locked in</h2>
+    </div>
+{% else %}
+    <div class="flex flex-row gap-2 items-center text-accent">
+        <svg viewBox="0 0 24 24" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" width="24" xmlns="http://www.w3.org/2000/svg"><rect height="10" rx="2" ry="2" width="16" x="4" y="12"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>
+        <h2 class="text-xl">Guesses are open</h2>
+    </div>
+{% endif %}
+
+<div class="grid gap-4 xs:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 py-4">
+    {% for item in items %}
+        {% if item.enabled %}
+            {% include "game-as-player-item.html" %}
+        {% endif %}
+    {% endfor %}
+</div>

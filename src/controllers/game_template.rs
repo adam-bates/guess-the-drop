@@ -22,6 +22,9 @@ use tower_sessions::Session;
 
 const MAX_TEMPLATES_PER_USER: usize = 100;
 
+const DEFAULT_REWARD_MSG: &str = "<USER> correctly guessed <ITEM>";
+const DEFAULT_TOTAL_REWARD_MSG: &str = "<USER> won with <POINTS>/<TOTAL> correct guesses";
+
 pub fn add_routes(router: Router<AppState>) -> Router<AppState> {
     return router
         .route("/game-templates", get(templates).post(post_template))
@@ -104,6 +107,8 @@ async fn templates(session: Session, State(state): State<AppState>) -> Result<im
 #[template(path = "new-game-template.html")]
 struct NewGameTemplateTemplate {
     user: User,
+    default_reward_msg: &'static str,
+    default_total_reward_msg: &'static str,
 }
 
 async fn new_template(
@@ -113,7 +118,11 @@ async fn new_template(
     let sid = utils::session_id(&session)?;
     let (user, _) = utils::require_user(&state, &sid).await?.split();
 
-    return Ok(Html(NewGameTemplateTemplate { user }));
+    return Ok(Html(NewGameTemplateTemplate {
+        user,
+        default_reward_msg: DEFAULT_REWARD_MSG,
+        default_total_reward_msg: DEFAULT_TOTAL_REWARD_MSG,
+    }));
 }
 
 #[derive(Deserialize)]
@@ -135,6 +144,8 @@ async fn new_template_x_add_item(params: Query<NewGameTempateAddItemParams>) -> 
 #[template(path = "new-game-template-post-msg.html")]
 struct NewGameTemplatePostMsgTemplate {
     session: SessionAuth,
+    default_reward_msg: &'static str,
+    default_total_reward_msg: &'static str,
 }
 
 async fn new_template_x_post_msg(
@@ -146,6 +157,8 @@ async fn new_template_x_post_msg(
 
     return Ok(Html(NewGameTemplatePostMsgTemplate {
         session: session_auth,
+        default_reward_msg: DEFAULT_REWARD_MSG,
+        default_total_reward_msg: DEFAULT_TOTAL_REWARD_MSG,
     }));
 }
 
@@ -161,6 +174,8 @@ async fn new_template_x_no_post_msg() -> impl IntoResponse {
 #[template(path = "new-game-template-post-total-msg.html")]
 struct NewGameTemplatePostTotalMsgTemplate {
     session: SessionAuth,
+    default_reward_msg: &'static str,
+    default_total_reward_msg: &'static str,
 }
 
 async fn new_template_x_post_total_msg(
@@ -172,6 +187,8 @@ async fn new_template_x_post_total_msg(
 
     return Ok(Html(NewGameTemplatePostTotalMsgTemplate {
         session: session_auth,
+        default_reward_msg: DEFAULT_REWARD_MSG,
+        default_total_reward_msg: DEFAULT_TOTAL_REWARD_MSG,
     }));
 }
 
@@ -191,6 +208,8 @@ struct EditGameTemplateTemplate {
     template: GameTemplate,
     items: Vec<(usize, GameItemTemplate)>,
     img_base_uri: String,
+    default_reward_msg: &'static str,
+    default_total_reward_msg: &'static str,
 }
 
 async fn edit_template(
@@ -224,6 +243,8 @@ async fn edit_template(
         template: game_template,
         items: game_item_templates.into_iter().enumerate().collect(),
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
+        default_reward_msg: DEFAULT_REWARD_MSG,
+        default_total_reward_msg: DEFAULT_TOTAL_REWARD_MSG,
     })
     .into_response());
 }
@@ -273,6 +294,8 @@ async fn edit_template_x_add_item(
 struct EditGameTemplatePostMsgTemplate {
     session: SessionAuth,
     template: GameTemplate,
+    default_reward_msg: &'static str,
+    default_total_reward_msg: &'static str,
 }
 
 async fn edit_template_x_post_msg(
@@ -298,6 +321,8 @@ async fn edit_template_x_post_msg(
     return Ok(Html(EditGameTemplatePostMsgTemplate {
         session: session_auth,
         template: game_template,
+        default_reward_msg: DEFAULT_REWARD_MSG,
+        default_total_reward_msg: DEFAULT_TOTAL_REWARD_MSG,
     })
     .into_response());
 }
@@ -339,6 +364,8 @@ async fn edit_template_x_no_post_msg(
 struct EditGameTemplatePostTotalMsgTemplate {
     session: SessionAuth,
     template: GameTemplate,
+    default_reward_msg: &'static str,
+    default_total_reward_msg: &'static str,
 }
 
 async fn edit_template_x_post_total_msg(
@@ -364,6 +391,8 @@ async fn edit_template_x_post_total_msg(
     return Ok(Html(EditGameTemplatePostTotalMsgTemplate {
         session: session_auth,
         template: game_template,
+        default_reward_msg: DEFAULT_REWARD_MSG,
+        default_total_reward_msg: DEFAULT_TOTAL_REWARD_MSG,
     })
     .into_response());
 }
