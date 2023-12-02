@@ -1,25 +1,10 @@
 {% extends "authed-base.html" %}
 
 {% block content %}
-    <h2 class="text-5xl font-bold">Game code: {{ game.game_code }}</h2>
-    <h2 class="text-5xl font-bold">Twitch name: {{ user.username }}</h2>
-    <p>You are a player. You have {{ player.points }} points.</p>
-
-    <div class="divider"></div>
-
-    <h3>Name: {{ game.name }}</h3>
-    <h3>Status: {{ game.status }}</h3>
-    <h3>Created: {{ game.created_at }}</h3>
-
-    <div class="divider"></div>
-
-    <div id="game_board">
-        {% include "game-as-player-board.html" %}
-    </div>
-
     <div hx-ext="sse" sse-connect="/games/{{ game.game_code }}/sse/player">
-        <h2>Messages:</h2>
-        <div sse-swap="message" hx-swap="beforeend"></div>
+        <div id="game_board" hx-get="/games/{{ game.game_code }}/x/board" hx-trigger="sse:host_action">
+            {% include "game-as-player-board.html" %}
+        </div>
     </div>
 {% endblock %}
 

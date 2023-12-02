@@ -96,7 +96,6 @@ async fn main() -> Result {
             let mut stream = pubsub.host_actions.subscribe().await.unwrap();
 
             while let Some(value) = stream.next().await {
-                println!("GOOGLE PUBSUB(host_actions): {:#?}", value);
                 if let Ok(game_broadcasts) = game_broadcasts.read() {
                     if let Some(broadcast) = game_broadcasts.get(&value.game_code) {
                         let _ = broadcast.to_players.send(value);
@@ -114,7 +113,6 @@ async fn main() -> Result {
             let mut stream = pubsub.player_actions.subscribe().await.unwrap();
 
             while let Some(value) = stream.next().await {
-                println!("GOOGLE PUBSUB(player_actions): {:#?}", value);
                 if let Ok(game_broadcasts) = game_broadcasts.read() {
                     if let Some(broadcast) = game_broadcasts.get(&value.game_code) {
                         let _ = broadcast.to_host.send(value);

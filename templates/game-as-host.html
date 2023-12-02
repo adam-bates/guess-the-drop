@@ -1,28 +1,10 @@
 {% extends "authed-base.html" %}
 
 {% block content %}
-    <h2 class="text-5xl font-bold">Game code: {{ game.game_code }}</h2>
-    <h2 class="text-5xl font-bold">Twitch name: {{ user.username }}</h2>
-    <p>You are the host.</p>
-
-    <div class="divider"></div>
-
-    <h3>Name: {{ game.name }}</h3>
-    <h3>Status: {{ game.status }}</h3>
-    <h3>Created: {{ game.created_at }}</h3>
-    <h3>Active At: {{ game.active_at }}</h3>
-    <h3>Reward Message: {% if let Some(msg) = game.reward_message %} <code class="bg-base-100 px-1">{{ msg }}</code> {% endif %}</h3>
-    <h3>Total Reward Message: {% if let Some(msg) = game.total_reward_message %} <code class="bg-base-100 px-1">{{ msg }}</code> {% endif %}</h3>
-
-    <div class="divider"></div>
-
-    <div id="game_board">
-        {% include "game-as-host-board.html" %}
-    </div>
-
     <div hx-ext="sse" sse-connect="/games/{{ game.game_code }}/sse/host">
-        <h2>Messages:</h2>
-        <div sse-swap="message" hx-swap="beforeend"></div>
+        <div id="game_board" hx-get="/games/{{ game.game_code }}/x/board" hx-trigger="sse:player_action throttle:1s">
+            {% include "game-as-host-board.html" %}
+        </div>
     </div>
 {% endblock %}
 

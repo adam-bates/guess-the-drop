@@ -1,6 +1,5 @@
 use std::{
     collections::HashSet,
-    convert::Infallible,
     time::{Duration, SystemTime},
 };
 
@@ -13,7 +12,7 @@ use crate::{
         GAME_STATUS_ACTIVE, GAME_STATUS_FINISHED,
     },
     prelude::*,
-    pubsub::{HostAction, HostActionType},
+    pubsub::{HostAction, HostActionType, PlayerAction, PlayerActionType},
     GameBroadcast,
 };
 
@@ -39,6 +38,7 @@ pub fn add_routes(router: Router<AppState>) -> Router<AppState> {
         .route("/games", get(games).post(post_game))
         .route("/games/:game_code", get(game))
         .route("/games/:game_code/finish", post(finish_game))
+        .route("/games/:game_code/x/board", get(game_x_board))
         .route("/games/:game_code/x/lock", put(game_x_lock))
         .route("/games/:game_code/x/unlock", put(game_x_unlock))
         .route(
@@ -475,6 +475,16 @@ WHERE
             .execute(&state.db)
             .await?;
 
+        state
+            .pubsub
+            .player_actions
+            .publish(PlayerAction {
+                game_code: game_code.clone(),
+                user_id: user.user_id.clone(),
+                typ: PlayerActionType::Join,
+            })
+            .await?;
+
         (
             sqlx::query_as("SELECT * FROM game_players WHERE game_code = ? AND user_id = ?")
                 .bind(&game_code)
@@ -492,6 +502,93 @@ WHERE
         items,
         user,
         player,
+    })
+    .into_response());
+}
+
+async fn game_x_board(
+    Path(game_code): Path<String>,
+    session: Session,
+    State(state): State<AppState>,
+) -> Result<Response> {
+    let session_id = utils::session_id(&session)?;
+    let (user, _) = utils::require_user(&state, &session_id).await?.split();
+
+    if game_code.trim().is_empty() {
+        return Ok(Redirect::to("/").into_response());
+    }
+    let game_code = game_code.to_lowercase();
+
+    let game: Option<Game> =
+        sqlx::query_as("SELECT * FROM games WHERE game_code = ? AND status = 'ACTIVE' LIMIT 1")
+            .bind(&game_code)
+            .fetch_optional(&state.db)
+            .await?;
+
+    let Some(game) = game else {
+        return Ok(Redirect::to("/").into_response());
+    };
+
+    if game.user_id == user.user_id {
+        let items: Vec<GameItemWithGuessCount> = sqlx::query_as(
+            r#"
+SELECT *
+FROM game_items
+    LEFT OUTER JOIN (
+        SELECT item_id, COUNT(*) AS guess_count
+        FROM player_guesses
+        WHERE
+            game_code = ? AND
+            outcome_id IS NULL
+        GROUP BY item_id
+    ) AS guess_counts ON guess_counts.item_id = game_items.game_item_id
+WHERE
+    game_code = ?
+            "#,
+        )
+        .bind(&game_code)
+        .bind(&game_code)
+        .fetch_all(&state.db)
+        .await?;
+
+        return Ok(Html(GameAsHostBoardTemplate {
+            img_base_uri: state.cfg.r2_bucket_public_url.clone(),
+            game,
+            items,
+            user,
+        })
+        .into_response());
+    }
+
+    let game_player: Option<GamePlayer> =
+        sqlx::query_as("SELECT * FROM game_players WHERE game_code = ? AND user_id = ? LIMIT 1")
+            .bind(&game_code)
+            .bind(&user.user_id)
+            .fetch_optional(&state.db)
+            .await?;
+
+    let Some(game_player) = game_player else {
+        return Ok(Redirect::to("/").into_response());
+    };
+
+    let guess: Option<PlayerGuess> = sqlx::query_as("SELECT * FROM player_guesses WHERE game_code = ? AND player_id = ? AND outcome_id IS NULL LIMIT 1")
+        .bind(&game_code)
+        .bind(&game_player.game_player_id)
+        .fetch_optional(&state.db)
+        .await?;
+
+    let items = sqlx::query_as("SELECT * FROM game_items WHERE game_code = ?")
+        .bind(&game_code)
+        .fetch_all(&state.db)
+        .await?;
+
+    return Ok(Html(GameAsPlayerBoardTemplate {
+        game,
+        guess,
+        user,
+        items,
+        player: game_player,
+        img_base_uri: state.cfg.r2_bucket_public_url.clone(),
     })
     .into_response());
 }
@@ -650,7 +747,7 @@ WHERE
 }
 
 async fn game_x_choose_item(
-    Path((game_code, game_item_id)): Path<(String, String)>,
+    Path((game_code, game_item_id)): Path<(String, u64)>,
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Response> {
@@ -747,6 +844,25 @@ async fn game_x_choose_item(
         .execute(&state.db)
         .await?;
 
+    if game.is_locked {
+        sqlx::query("UPDATE games SET is_locked = false WHERE game_code = ?")
+            .bind(&game_code)
+            .execute(&state.db)
+            .await?;
+        game.is_locked = false;
+    }
+
+    state
+        .pubsub
+        .host_actions
+        .publish(HostAction {
+            game_code: game_code.clone(),
+            typ: HostActionType::Choose {
+                item_id: game_item_id.clone(),
+            },
+        })
+        .await?;
+
     let items: Vec<GameItemWithGuessCount> = sqlx::query_as(
         r#"
 SELECT *
@@ -768,14 +884,6 @@ WHERE
     .fetch_all(&state.db)
     .await?;
 
-    if game.is_locked {
-        sqlx::query("UPDATE games SET is_locked = false WHERE game_code = ?")
-            .bind(&game_code)
-            .execute(&state.db)
-            .await?;
-        game.is_locked = false;
-    }
-
     return Ok(Html(GameAsHostBoardTemplate {
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
         game,
@@ -792,11 +900,12 @@ struct GameAsPlayerBoardTemplate {
     guess: Option<PlayerGuess>,
     items: Vec<GameItem>,
     user: User,
+    player: GamePlayer,
     img_base_uri: String,
 }
 
 async fn game_x_guess_item(
-    Path((game_code, game_item_id)): Path<(String, String)>,
+    Path((game_code, game_item_id)): Path<(String, u64)>,
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Response> {
@@ -856,6 +965,19 @@ async fn game_x_guess_item(
             .execute(&state.db)
             .await?;
 
+        state
+            .pubsub
+            .player_actions
+            .publish(PlayerAction {
+                game_code: game_code.clone(),
+                user_id: user.user_id.clone(),
+                typ: PlayerActionType::ChangeGuess {
+                    from_item_id: guess.item_id.clone(),
+                    to_item_id: game_item.game_item_id.clone(),
+                },
+            })
+            .await?;
+
         guess.item_id = game_item.game_item_id;
 
         guess
@@ -866,6 +988,18 @@ async fn game_x_guess_item(
             .bind(&game_item.game_item_id)
             .bind(None as Option<u64>)
             .execute(&state.db)
+            .await?;
+
+        state
+            .pubsub
+            .player_actions
+            .publish(PlayerAction {
+                game_code: game_code.clone(),
+                user_id: user.user_id.clone(),
+                typ: PlayerActionType::Guess {
+                    item_id: game_item.game_item_id.clone(),
+                },
+            })
             .await?;
 
         let guess: PlayerGuess = sqlx::query_as("SELECT * FROM player_guesses WHERE game_code = ? AND player_id = ? AND item_id = ? AND outcome_id IS NULL LIMIT 1")
@@ -888,6 +1022,7 @@ async fn game_x_guess_item(
         guess: Some(guess),
         user,
         items,
+        player: game_player,
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
     })
     .into_response());
@@ -902,7 +1037,7 @@ struct GameAsHostItemTemplate {
 }
 
 async fn game_x_enable_item(
-    Path((game_code, game_item_id)): Path<(String, String)>,
+    Path((game_code, game_item_id)): Path<(String, u64)>,
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Response> {
@@ -966,6 +1101,17 @@ LIMIT 1
         .await?;
 
         game_item.enabled = true;
+
+        state
+            .pubsub
+            .host_actions
+            .publish(HostAction {
+                game_code: game_code.clone(),
+                typ: HostActionType::Enable {
+                    item_id: game_item_id.clone(),
+                },
+            })
+            .await?;
     }
 
     return Ok(Html(GameAsHostItemTemplate {
@@ -977,7 +1123,7 @@ LIMIT 1
 }
 
 async fn game_x_disable_item(
-    Path((game_code, game_item_id)): Path<(String, String)>,
+    Path((game_code, game_item_id)): Path<(String, u64)>,
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Response> {
@@ -1041,6 +1187,17 @@ LIMIT 1
         .await?;
 
         game_item.enabled = false;
+
+        state
+            .pubsub
+            .host_actions
+            .publish(HostAction {
+                game_code: game_code.clone(),
+                typ: HostActionType::Disable {
+                    item_id: game_item_id.clone(),
+                },
+            })
+            .await?;
     }
 
     return Ok(Html(GameAsHostItemTemplate {
@@ -1184,10 +1341,15 @@ async fn host_sse(
 
     let rx = broadcast.to_host.subscribe();
 
-    let stream = BroadcastStream::new(rx).map(move |e| -> Result<Event, Infallible> {
-        println!("BroadcastStream event: {:#?}", e);
-        let e = e.unwrap();
-        return Ok(Event::default().data(format!("<p>{}: {:?}</p>", e.game_code, e.typ)));
+    let stream = BroadcastStream::new(rx).map(move |event| -> Result<Event> {
+        // let name = match &event?.typ {
+        //     PlayerActionType::Join => "join",
+        //     PlayerActionType::Guess { .. } => "guess",
+        //     PlayerActionType::ChangeGuess { .. } => "change_guess",
+        // };
+        let name = "player_action";
+
+        return Ok(Event::default().event(name).data(name));
     });
 
     return Ok(Sse::new(stream)
@@ -1267,10 +1429,38 @@ async fn player_sse(
 
     let rx = broadcast.to_players.subscribe();
 
-    let stream = BroadcastStream::new(rx).map(move |e| -> Result<Event, Infallible> {
-        println!("BroadcastStream event: {:#?}", e);
-        let e = e.unwrap();
-        return Ok(Event::default().data(format!("<p>{}: {:?}</p>", e.game_code, e.typ)));
+    let stream = BroadcastStream::new(rx).map(|event| -> Result<Event> {
+        // let name = match &event?.typ {
+        //     HostActionType::Lock => "lock",
+        //     HostActionType::Unlock => "unlock",
+        //     HostActionType::Choose { .. } => "choose",
+        //     HostActionType::Enable { .. } => "enable",
+        //     HostActionType::Disable { .. } => "disable",
+        // };
+        let name = "host_action";
+
+        return Ok(Event::default().event(name).data(name));
+
+        // return tokio::runtime::Runtime::new()?.block_on(async move {
+        //     let host_action = event?;
+        //     match &host_action.typ {
+        //         HostActionType::Lock => {
+        //             // let res = game_x_lock(
+        //             //     Path((game_code.clone())),
+        //             //     session.clone(),
+        //             //     State(state.clone()),
+        //             // )
+        //             // .await?;
+        //         }
+
+        //         _ => compile_error!(),
+        //     }
+
+        //     return Ok(Event::default().data(format!(
+        //         "<p>{:#?}</p>",
+        //         serde_json::to_string_pretty(&host_action),
+        //     )));
+        // });
     });
 
     return Ok(Sse::new(stream)

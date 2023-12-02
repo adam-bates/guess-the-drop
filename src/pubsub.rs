@@ -112,7 +112,6 @@ pub enum PlayerActionType {
     Join,
     Guess { item_id: u64 },
     ChangeGuess { from_item_id: u64, to_item_id: u64 },
-    UndoGuess { item_id: u64 },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

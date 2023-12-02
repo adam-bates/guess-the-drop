@@ -2,6 +2,7 @@ use anyhow;
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
+    BoxError,
 };
 
 #[derive(Debug)]
@@ -25,5 +26,11 @@ where
 {
     fn from(err: E) -> Self {
         Self(err.into())
+    }
+}
+
+impl Into<BoxError> for AppError {
+    fn into(self) -> BoxError {
+        return self.0.into();
     }
 }
