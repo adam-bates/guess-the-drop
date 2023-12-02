@@ -59,6 +59,7 @@ where
                             nanos: 0,
                         }),
                     }),
+                    enable_exactly_once_delivery: true,
                     ..Default::default()
                 },
                 None,
