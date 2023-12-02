@@ -20,6 +20,29 @@
                     </thead>
 
                     {% for game in games_hosted %}
+                        {% let is_was -%}
+                        {% let are_were -%}
+                        {% let has_been_was -%}
+                        {% let has_been_were -%}
+                        {% let have_got -%}
+                        {% let so_far_ -%}
+
+                        {% if game.status == "ACTIVE" -%}
+                            {% let is_was = "is" -%}
+                            {% let are_were = "are" -%}
+                            {% let has_been_was = "has been" -%}
+                            {% let has_been_were = "has been" -%}
+                            {% let have_got = "have" -%}
+                            {% let so_far_ = " so far" -%}
+                        {% else -%}
+                            {% let is_was = "was" -%}
+                            {% let are_were = "were" -%}
+                            {% let has_been_was = "was" -%}
+                            {% let has_been_were = "were" -%}
+                            {% let have_got = "got" -%}
+                            {% let so_far_ = "" -%}
+                        {% endif -%}
+
                         <tbody>
                             <tr>
                                 <td class="align-text-top">
@@ -41,20 +64,48 @@
                                 <td id="hosted_{{ game.game_code }}" class="align-text-top"></td>
                                 <td>
                                     <ul>
-                                        <li>{{ game.players_count.unwrap_or(0) }} {% if let Some(1) = game.players_count %} player {% else %} players {% endif %}</li>
-                                        <li>{{ game.winners_count.unwrap_or(0) }} {% if let Some(1) = game.winners_count %} winner {% else %} winners {% endif %}</li>
+                                        {% if let Some(players_count) = game.players_count %}
+                                            {% if let 0 = players_count %}
+                                                <li>There {{ are_were }} no players</li>
+                                            {% else %}
+                                                {% if let 1 = players_count %}
+                                                    <li>There {{ is_was }} 1 player</li>
+                                                {% else %}
+                                                    <li>There {{ are_were }} {{ players_count }} players</li>
+                                                {% endif %}
+                                            {% endif %}
+                                        {% endif %}
+
+                                        {% if game.status != "ACTIVE" %}
+                                            {% if let Some(winners_count) = game.winners_count %}
+                                                {% if let 0 = winners_count %}
+                                                    <li>There were no winners</li>
+                                                {% else %}
+                                                    {% if let 1 = winners_count %}
+                                                        <li>There was 1 winner</li>
+                                                    {% else %}
+                                                        <li>There were {{ winners_count }} winners</li>
+                                                    {% endif %}
+                                                {% endif %}
+                                            {% endif %}
+                                        {% endif %}
 
                                         {% if let Some(total_drops) = game.total_drops %}
                                             {% if let 0 = total_drops %}
+                                                <li>Nothing {{ has_been_was }} dropped{{ so_far_ }}</li>
                                             {% else %}
                                                 {% if let 1 = total_drops %}
-                                                    <li>There was 1 drop</li>
+                                                    <li>There {{ has_been_was }} 1 drop{{ so_far_ }}</li>
                                                 {% else %}
-                                                    <li>There were {{ total_drops }} drops</li>
+                                                    <li>There {{ has_been_were }} {{ total_drops }} drops{{ so_far_ }}</li>
                                                 {% endif %}
 
                                                 {% if let Some(winning_points) = game.winning_points %}
-                                                    <li>Winner got {{ game.winning_points.unwrap() }} / {{ total_drops }} correct guesses</li>
+                                                    {% if winning_points == total_drops %}
+                                                        <li>The winner guessed every drop correctly!</li>
+                                                    {% else %}
+                                                        <li>The winner got {{ winning_points }}/{{ total_drops }} correct guesses</li>
+                                                    {% endif %}
                                                 {% endif %}
                                             {% endif %}
                                         {% endif %}
@@ -91,6 +142,32 @@
                     </thead>
 
                     {% for game in games_joined %}
+                        {% let is_was -%}
+                        {% let are_were -%}
+                        {% let has_been_was -%}
+                        {% let has_been_were -%}
+                        {% let have_got -%}
+                        {% let have_had_got -%}
+                        {% let so_far_ -%}
+
+                        {% if game.status == "ACTIVE" -%}
+                            {% let is_was = "is" -%}
+                            {% let are_were = "are" -%}
+                            {% let has_been_was = "has been" -%}
+                            {% let has_been_were = "has been" -%}
+                            {% let have_got = "have" -%}
+                            {% let have_had_got = "have had" -%}
+                            {% let so_far_ = " so far" -%}
+                        {% else -%}
+                            {% let is_was = "was" -%}
+                            {% let are_were = "were" -%}
+                            {% let has_been_was = "was" -%}
+                            {% let has_been_were = "were" -%}
+                            {% let have_got = "got" -%}
+                            {% let have_had_got = "got" -%}
+                            {% let so_far_ = "" -%}
+                        {% endif -%}
+
                         <tbody>
                             <tr>
                                 <td class="align-text-top">
@@ -119,21 +196,41 @@
                                             <li>You won this game!</li>
                                         {% endif %}
 
-                                        <li>You have {{ game.points }} points</li>
+                                        {% if let 0 = game.points %}
+                                            <li>You {{ have_had_got }} no correct guesses{{ so_far_ }}</li>
+                                        {% else if let 1 = game.points %}
+                                            <li>You {{ have_had_got }} 1 correct guess{{ so_far_ }}</li>
+                                        {% else %}
+                                            <li>You {{ have_had_got }} {{ game.points }} correct guesses{{ so_far_ }}</li>
+                                        {% endif %}
 
-                                        <li>{{ game.players_count.unwrap_or(0) }} {% if let Some(1) = game.players_count %} player {% else %} players {% endif %}</li>
+                                        {% if let Some(players_count) = game.players_count %}
+                                            {% if let 0 = players_count %}
+                                            {% else %}
+                                                {% if let 1 = players_count %}
+                                                    <li>There {{ is_was }} 1 player</li>
+                                                {% else %}
+                                                    <li>There {{ are_were }} {{ players_count }} players</li>
+                                                {% endif %}
+                                            {% endif %}
+                                        {% endif %}
 
                                         {% if let Some(total_drops) = game.total_drops %}
                                             {% if let 0 = total_drops %}
+                                                <li>Nothing {{ has_been_was }} dropped{{ so_far_ }}</li>
                                             {% else %}
                                                 {% if let 1 = total_drops %}
-                                                    <li>There was 1 drop</li>
+                                                    <li>There {{ has_been_was }} 1 drop{{ so_far_ }}</li>
                                                 {% else %}
-                                                    <li>There were {{ total_drops }} drops</li>
+                                                    <li>There {{ has_been_were }} {{ total_drops }} drops{{ so_far_ }}</li>
                                                 {% endif %}
 
                                                 {% if let Some(winning_points) = game.winning_points %}
-                                                    <li>Winner got {{ game.winning_points.unwrap() }} / {{ total_drops }} correct guesses</li>
+                                                    {% if winning_points == total_drops %}
+                                                        <li>The winner guessed every drop correctly!</li>
+                                                    {% else %}
+                                                        <li>The winner got {{ winning_points }}/{{ total_drops }} correct guesses</li>
+                                                    {% endif %}
                                                 {% endif %}
                                             {% endif %}
                                         {% endif %}

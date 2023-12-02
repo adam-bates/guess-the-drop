@@ -11,7 +11,7 @@
             <span class="label-text">Chat Message</span>
         </label>
 
-        <input type="text" id="post-msg" name="post-msg" required placeholder="<USER> correctly guessed <ITEM>" {% if let Some(post_msg) = template.reward_message %} value="{{ post_msg }}" {% endif %} class="input input-bordered w-full max-w-lg" />
+        <input type="text" id="post-msg" name="post-msg" placeholder="{{ default_reward_msg }}" {% if let Some(post_msg) = template.reward_message %} value="{{ post_msg }}" {% endif %} class="input input-bordered w-full max-w-lg" />
     </div>
 
     {% if !session.can_chat %}

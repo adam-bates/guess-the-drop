@@ -6,12 +6,7 @@ mod utils;
 use crate::{models::User, prelude::*};
 
 use askama::Template;
-use axum::{
-    extract::{Multipart, State},
-    response::IntoResponse,
-    routing::get,
-    Router,
-};
+use axum::{extract::State, response::IntoResponse, routing::get, Router};
 use nanoid::nanoid;
 use reqwest::StatusCode;
 use tower_sessions::Session;
@@ -63,28 +58,4 @@ async fn index(session: Session, State(state): State<AppState>) -> Result<impl I
     });
 
     return Ok(IndexTemplate { user });
-}
-
-async fn _upload(State(state): State<AppState>, mut files: Multipart) -> Result<impl IntoResponse> {
-    let Some(file) = files.next_field().await? else {
-        return Ok(format!("Error fetching file"));
-    };
-
-    let category = file.name().unwrap().to_string();
-
-    let name = match file.file_name() {
-        Some(name) if !name.is_empty() => name.to_string(),
-        _ => return Ok(format!("File name is required")),
-    };
-
-    let data = file.bytes().await?;
-    if data.is_empty() {
-        return Ok(format!("Empty file not allowed"));
-    }
-
-    let key = format!("{category}_{name}_{}", nanoid!());
-
-    state.bucket.put_object(&key, &data).await?;
-
-    return Ok(format!("{}/{}", state.cfg.r2_bucket_public_url, key));
 }

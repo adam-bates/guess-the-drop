@@ -11,7 +11,7 @@
             <span class="label-text">Chat Message</span>
         </label>
 
-        <input type="text" id="post-total-msg" name="post-total-msg" required placeholder="<USER> won with <POINTS> / <TOTAL> correct guesses" {% if let Some(post_total_msg) = template.total_reward_message %} value="{{ post_total_msg }}" {% endif %} class="input input-bordered w-full max-w-lg" />
+        <input type="text" id="post-total-msg" name="post-total-msg" placeholder="{{ default_total_reward_msg }}" {% if let Some(post_total_msg) = template.total_reward_message %} value="{{ post_total_msg }}" {% endif %} class="input input-bordered w-full max-w-lg" />
     </div>
 
     {% if !session.can_chat %}

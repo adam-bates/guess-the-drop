@@ -11,7 +11,7 @@ use askama::Template;
 use askama_axum::Response;
 use axum::{
     extract::{Multipart, Path, Query, State},
-    http::{HeaderValue, StatusCode},
+    http::StatusCode,
     response::{IntoResponse, Redirect},
     routing::get,
     Router,
@@ -468,11 +468,9 @@ async fn post_template(
                 let txt = field.text().await?;
                 let txt = txt.trim();
 
-                if txt.is_empty() {
-                    return Err(anyhow::anyhow!("Chat message cannot be blank"))?;
+                if !txt.is_empty() {
+                    post_msg = Some(txt.to_string());
                 }
-
-                post_msg = Some(txt.to_string());
             }
 
             Some("should-post-total") => match field.bytes().await?.as_ref() {
@@ -483,11 +481,9 @@ async fn post_template(
                 let txt = field.text().await?;
                 let txt = txt.trim();
 
-                if txt.is_empty() {
-                    return Err(anyhow::anyhow!("Chat message cannot be blank"))?;
+                if !txt.is_empty() {
+                    post_total_msg = Some(txt.to_string());
                 }
-
-                post_total_msg = Some(txt.to_string());
             }
 
             Some(item_field_name) if item_field_name.starts_with("items[") => {
@@ -551,8 +547,9 @@ async fn post_template(
         return Err(anyhow::anyhow!("Template name is required"))?;
     };
 
-    let reward_message = should_post.map(|_| post_msg).flatten();
-    let total_reward_message = should_post_total.map(|_| post_total_msg).flatten();
+    let reward_message = should_post.map(|_| post_msg.unwrap_or(DEFAULT_REWARD_MSG.to_string()));
+    let total_reward_message =
+        should_post_total.map(|_| post_total_msg.unwrap_or(DEFAULT_TOTAL_REWARD_MSG.to_string()));
 
     let items = {
         let mut list = vec![];
@@ -713,11 +710,9 @@ async fn put_template(
                 let txt = field.text().await?;
                 let txt = txt.trim();
 
-                if txt.is_empty() {
-                    return Err(anyhow::anyhow!("Chat message cannot be blank"))?;
+                if !txt.is_empty() {
+                    post_msg = Some(txt.to_string());
                 }
-
-                post_msg = Some(txt.to_string());
             }
 
             Some("should-post-total") => match field.bytes().await?.as_ref() {
@@ -728,11 +723,9 @@ async fn put_template(
                 let txt = field.text().await?;
                 let txt = txt.trim();
 
-                if txt.is_empty() {
-                    return Err(anyhow::anyhow!("Chat message cannot be blank"))?;
+                if !txt.is_empty() {
+                    post_total_msg = Some(txt.to_string());
                 }
-
-                post_total_msg = Some(txt.to_string());
             }
 
             Some(item_field_name) if item_field_name.starts_with("items[") => {
@@ -799,8 +792,9 @@ async fn put_template(
         return Err(anyhow::anyhow!("Template name is required"))?;
     };
 
-    let reward_message = should_post.map(|_| post_msg).flatten();
-    let total_reward_message = should_post_total.map(|_| post_total_msg).flatten();
+    let reward_message = should_post.map(|_| post_msg.unwrap_or(DEFAULT_REWARD_MSG.to_string()));
+    let total_reward_message =
+        should_post_total.map(|_| post_total_msg.unwrap_or(DEFAULT_TOTAL_REWARD_MSG.to_string()));
 
     let items = {
         let mut list = vec![];

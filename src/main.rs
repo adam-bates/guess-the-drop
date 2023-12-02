@@ -12,12 +12,18 @@ use std::{
 };
 
 use axum::{
-    error_handling::HandleErrorLayer, extract::DefaultBodyLimit, http::StatusCode, Router, Server,
+    error_handling::HandleErrorLayer,
+    extract::DefaultBodyLimit,
+    http::{Request, StatusCode},
+    middleware::{self, Next},
+    response::Response,
+    Router, Server,
 };
+use headers::HeaderValue;
 use lazy_static::lazy_static;
 use nanoid::nanoid;
 use pubsub::{HostAction, PlayerAction, PubSubClients};
-use reqwest::{Method, Version};
+use reqwest::{header::LOCATION, Method};
 use s3::Bucket;
 use sqlx::MySqlPool;
 use tokio::sync::broadcast;
@@ -174,7 +180,8 @@ async fn main() -> Result {
                 fallback: compression::DefaultPredicate::new(),
             }),
         )
-        .layer(TimeoutLayer::new(Duration::from_secs(30)));
+        .layer(TimeoutLayer::new(Duration::from_secs(30)))
+        .layer(middleware::from_fn(add_redirect_header));
 
     Server::bind(&addr)
         .serve(router.into_make_service())
@@ -203,4 +210,30 @@ impl compression::Predicate for CustomCompression {
 
         return self.fallback.should_compress(response);
     }
+}
+
+async fn add_redirect_header<B>(req: Request<B>, next: Next<B>) -> Response {
+    let is_hx = if let Some(val) = req.headers().get("HX-Request") {
+        matches!(val.to_str(), Ok("true"))
+    } else {
+        false
+    };
+
+    let mut res = next.run(req).await;
+
+    if is_hx && res.status().is_redirection() {
+        let headers = res.headers_mut();
+
+        let Some(dest) = headers.remove(LOCATION) else {
+            return res;
+        };
+
+        headers.insert("HX-Redirect", dest.clone());
+        headers.insert("HX-Replace-Url", dest);
+
+        let status = res.status_mut();
+        *status = StatusCode::OK;
+    }
+
+    return res;
 }

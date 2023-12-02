@@ -316,6 +316,7 @@ struct GameAsPlayerTemplate {
     user: User,
     player: GamePlayer,
     img_base_uri: String,
+    is_finished: bool,
 }
 
 #[derive(Template, Clone)]
@@ -502,6 +503,7 @@ WHERE
         items,
         user,
         player,
+        is_finished: false,
     })
     .into_response());
 }
@@ -582,6 +584,8 @@ WHERE
         .fetch_all(&state.db)
         .await?;
 
+    let is_finished = game.status.as_str() != GAME_STATUS_ACTIVE;
+
     return Ok(Html(GameAsPlayerBoardTemplate {
         game,
         guess,
@@ -589,6 +593,7 @@ WHERE
         items,
         player: game_player,
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
+        is_finished,
     })
     .into_response());
 }
@@ -902,6 +907,7 @@ struct GameAsPlayerBoardTemplate {
     user: User,
     player: GamePlayer,
     img_base_uri: String,
+    is_finished: bool,
 }
 
 async fn game_x_guess_item(
@@ -1024,6 +1030,7 @@ async fn game_x_guess_item(
         items,
         player: game_player,
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
+        is_finished: false,
     })
     .into_response());
 }

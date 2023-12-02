@@ -1,7 +1,7 @@
 {% extends "authed-base.html" %}
 
 {% block content %}
-    <form hx-put="/game-templates/{{ template.game_template_id }}" enctype="multipart/form-data">
+    <form hx-put="/game-templates/{{ template.game_template_id }}" hx-target="#body" enctype="multipart/form-data">
         <div class="flex flex-col gap-5">
             <div class="flex flex-row gap-5">
                 <div>
