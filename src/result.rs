@@ -7,7 +7,7 @@ use axum::{
 #[derive(Debug)]
 pub struct AppError(pub anyhow::Error);
 
-pub type Result<T = ()> = anyhow::Result<T, AppError>;
+pub type Result<T = (), E = AppError> = anyhow::Result<T, E>;
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {

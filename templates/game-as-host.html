@@ -19,5 +19,10 @@
     <div id="game_board">
         {% include "game-as-host-board.html" %}
     </div>
+
+    <div hx-ext="sse" sse-connect="/games/{{ game.game_code }}/sse/host">
+        <h2>Messages:</h2>
+        <div sse-swap="message" hx-swap="beforeend"></div>
+    </div>
 {% endblock %}
 

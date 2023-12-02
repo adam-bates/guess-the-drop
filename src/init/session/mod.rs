@@ -1,4 +1,5 @@
-use super::mysql_store::MySqlStore;
+mod mysql_store;
+use mysql_store::MySqlStore;
 
 use crate::prelude::*;
 
@@ -7,7 +8,7 @@ use tower_sessions::{CachingSessionStore, MokaStore};
 
 const SESSION_CACHE_CAPACITY: u64 = 2000;
 
-pub async fn build(
+pub async fn init_session_store(
     cfg: &Config,
     db: MySqlPool,
 ) -> Result<CachingSessionStore<MokaStore, MySqlStore>> {

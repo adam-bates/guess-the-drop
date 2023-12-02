@@ -25,6 +25,8 @@ pub struct Config {
 
     pub r2_s3_access_key_id: String,
     pub r2_s3_secret_access_key: String,
+
+    pub google_key_json_filepath: String,
 }
 
 pub fn load() -> Result<Config> {
@@ -66,5 +68,7 @@ pub fn load() -> Result<Config> {
 
         r2_s3_access_key_id: env::var("R2_S3_ACCESS_KEY_ID")?,
         r2_s3_secret_access_key: env::var("R2_S3_SECRET_ACCESS_KEY")?,
+
+        google_key_json_filepath: env::var("GOOGLE_KEY_JSON_FILEPATH")?,
     });
 }

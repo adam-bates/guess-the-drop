@@ -1,4 +1,8 @@
-use std::{collections::HashSet, time::SystemTime};
+use std::{
+    collections::HashSet,
+    convert::Infallible,
+    time::{Duration, SystemTime},
+};
 
 use super::*;
 
@@ -9,16 +13,24 @@ use crate::{
         GAME_STATUS_ACTIVE, GAME_STATUS_FINISHED,
     },
     prelude::*,
+    pubsub::{HostAction, HostActionType},
+    GameBroadcast,
 };
 
 use askama::Template;
 use axum::{
     extract::{Path, Query, State},
-    response::{IntoResponse, Redirect, Response},
+    response::{
+        sse::{Event, Sse},
+        IntoResponse, Redirect, Response,
+    },
     routing::{get, post, put},
     Form, Router,
 };
 use serde::Deserialize;
+use tokio::sync::broadcast;
+use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::StreamExt as _;
 use tower_sessions::Session;
 
 pub fn add_routes(router: Router<AppState>) -> Router<AppState> {
@@ -44,7 +56,9 @@ pub fn add_routes(router: Router<AppState>) -> Router<AppState> {
         .route(
             "/games/:game_code/items/:game_item_id/x/guess",
             put(game_x_guess_item),
-        );
+        )
+        .route("/games/:game_code/sse/host", get(host_sse))
+        .route("/games/:game_code/sse/player", get(player_sse));
 }
 
 #[derive(Debug, Deserialize)]
@@ -415,6 +429,20 @@ WHERE
         .into_response());
     }
 
+    {
+        let broadcasts = &mut *state.game_broadcasts.write().unwrap();
+
+        let _entry = broadcasts.entry(game_code.clone()).or_insert_with(|| {
+            let (host_tx, _host_rx) = broadcast::channel(16);
+            let (players_tx, _players_rx) = broadcast::channel(16);
+
+            return GameBroadcast {
+                to_host: host_tx,
+                to_players: players_tx,
+            };
+        });
+    }
+
     if game.user_id == user.user_id {
         return Ok(Html(GameAsHostTemplate {
             img_base_uri: state.cfg.r2_bucket_public_url.clone(),
@@ -510,6 +538,15 @@ async fn game_x_lock(
         game.is_locked = true;
     }
 
+    state
+        .pubsub
+        .host_actions
+        .publish(HostAction {
+            game_code: game_code.clone(),
+            typ: HostActionType::Lock,
+        })
+        .await?;
+
     let items: Vec<GameItemWithGuessCount> = sqlx::query_as(
         r#"
 SELECT *
@@ -572,6 +609,15 @@ async fn game_x_unlock(
             .await?;
         game.is_locked = false;
     }
+
+    state
+        .pubsub
+        .host_actions
+        .publish(HostAction {
+            game_code: game_code.clone(),
+            typ: HostActionType::Unlock,
+        })
+        .await?;
 
     let items: Vec<GameItemWithGuessCount> = sqlx::query_as(
         r#"
@@ -1079,4 +1125,159 @@ WHERE
     }
 
     return Ok(Redirect::to(&format!("/games/{game_code}")).into_response());
+}
+
+async fn host_sse(
+    Path(game_code): Path<String>,
+    session: Session,
+    State(state): State<AppState>,
+) -> Result<Response> {
+    let session_id = utils::session_id(&session)?;
+    let (user, _) = utils::require_user(&state, &session_id).await?.split();
+
+    if game_code.trim().is_empty() {
+        return Ok(Redirect::to("/").into_response());
+    }
+    let game_code = game_code.to_lowercase();
+
+    let game: Option<Game> = sqlx::query_as(
+        "SELECT * FROM games WHERE game_code = ? AND user_id = ? AND status = ? LIMIT 1",
+    )
+    .bind(&game_code)
+    .bind(&user.user_id)
+    .bind(GAME_STATUS_ACTIVE)
+    .fetch_optional(&state.db)
+    .await?;
+
+    let Some(game) = game else {
+        return Ok(Redirect::to("/").into_response());
+    };
+
+    if game.status != GAME_STATUS_ACTIVE {
+        return Ok(Redirect::to("/").into_response());
+    }
+
+    let guard = state.game_broadcasts.read().unwrap();
+    let game_broadcasts = &*guard;
+
+    let broadcast = match game_broadcasts.get(&game_code) {
+        Some(broadcast) => broadcast.clone(),
+        None => {
+            drop(guard);
+
+            let broadcasts = &mut *state.game_broadcasts.write().unwrap();
+
+            broadcasts
+                .entry(game_code.clone())
+                .or_insert_with(|| {
+                    let (host_tx, _host_rx) = broadcast::channel(16);
+                    let (players_tx, _players_rx) = broadcast::channel(16);
+
+                    return GameBroadcast {
+                        to_host: host_tx,
+                        to_players: players_tx,
+                    };
+                })
+                .clone()
+        }
+    };
+
+    let rx = broadcast.to_host.subscribe();
+
+    let stream = BroadcastStream::new(rx).map(move |e| -> Result<Event, Infallible> {
+        println!("BroadcastStream event: {:#?}", e);
+        let e = e.unwrap();
+        return Ok(Event::default().data(format!("<p>{}: {:?}</p>", e.game_code, e.typ)));
+    });
+
+    return Ok(Sse::new(stream)
+        .keep_alive(
+            axum::response::sse::KeepAlive::new()
+                .interval(Duration::from_secs(1))
+                .text("keep-alive-text"),
+        )
+        .into_response());
+}
+
+async fn player_sse(
+    Path(game_code): Path<String>,
+    session: Session,
+    State(state): State<AppState>,
+) -> Result<Response> {
+    let session_id = utils::session_id(&session)?;
+    let (user, _) = utils::require_user(&state, &session_id).await?.split();
+
+    if game_code.trim().is_empty() {
+        return Ok(Redirect::to("/").into_response());
+    }
+    let game_code = game_code.to_lowercase();
+
+    let game: Option<Game> = sqlx::query_as(
+        "SELECT * FROM games WHERE game_code = ? AND user_id != ? AND status = ? LIMIT 1",
+    )
+    .bind(&game_code)
+    .bind(&user.user_id)
+    .bind(GAME_STATUS_ACTIVE)
+    .fetch_optional(&state.db)
+    .await?;
+
+    let Some(game) = game else {
+        return Ok(Redirect::to("/").into_response());
+    };
+
+    if game.status != GAME_STATUS_ACTIVE {
+        return Ok(Redirect::to("/").into_response());
+    }
+
+    let game_player: Option<GamePlayer> =
+        sqlx::query_as("SELECT * FROM game_players WHERE game_code = ? AND user_id = ? LIMIT 1")
+            .bind(&game_code)
+            .bind(&user.user_id)
+            .fetch_optional(&state.db)
+            .await?;
+
+    let Some(_) = game_player else {
+        return Ok(Redirect::to("/").into_response());
+    };
+
+    let guard = state.game_broadcasts.read().unwrap();
+    let game_broadcasts = &*guard;
+
+    let broadcast = match game_broadcasts.get(&game_code) {
+        Some(broadcast) => broadcast.clone(),
+        None => {
+            drop(guard);
+
+            let broadcasts = &mut *state.game_broadcasts.write().unwrap();
+
+            broadcasts
+                .entry(game_code.clone())
+                .or_insert_with(|| {
+                    let (host_tx, _host_rx) = broadcast::channel(16);
+                    let (players_tx, _players_rx) = broadcast::channel(16);
+
+                    return GameBroadcast {
+                        to_host: host_tx,
+                        to_players: players_tx,
+                    };
+                })
+                .clone()
+        }
+    };
+
+    let rx = broadcast.to_players.subscribe();
+
+    let stream = BroadcastStream::new(rx).map(move |e| -> Result<Event, Infallible> {
+        println!("BroadcastStream event: {:#?}", e);
+        let e = e.unwrap();
+        return Ok(Event::default().data(format!("<p>{}: {:?}</p>", e.game_code, e.typ)));
+    });
+
+    return Ok(Sse::new(stream)
+        .keep_alive(
+            axum::response::sse::KeepAlive::new()
+                .interval(Duration::from_secs(1))
+                .text("keep-alive-text"),
+        )
+        .into_response());
 }

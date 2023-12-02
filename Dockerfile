@@ -18,6 +18,9 @@ FROM scratch
 # Binary
 COPY --from=builder /guess-the-drop/target/x86_64-unknown-linux-musl/release/guess-the-drop /guess-the-drop
 
+# Secrets
+COPY --from=builder /guess-the-drop/secrets /secrets
+
 # Assets
 COPY --from=builder /guess-the-drop/assets /assets
 COPY --from=builder /guess-the-drop/migrations /migrations

@@ -1,20 +1,29 @@
 mod config;
 mod controllers;
+mod init;
 mod models;
+mod pubsub;
 mod result;
-mod sessions;
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+    time::Duration,
+};
 
 use axum::{
     error_handling::HandleErrorLayer, extract::DefaultBodyLimit, http::StatusCode, Router, Server,
 };
-use reqwest::Method;
-use s3::{creds::Credentials, Bucket, Region};
+use lazy_static::lazy_static;
+use nanoid::nanoid;
+use pubsub::{HostAction, PlayerAction, PubSubClients};
+use reqwest::{Method, Version};
+use s3::Bucket;
 use sqlx::MySqlPool;
+use tokio::sync::broadcast;
 use tower::ServiceBuilder;
 use tower_http::{
-    compression::CompressionLayer,
+    compression,
     cors::CorsLayer,
     services::{ServeDir, ServeFile},
     timeout::TimeoutLayer,
@@ -28,34 +37,102 @@ pub mod prelude {
     pub use crate::AppState;
 
     pub use crate::controllers::Html;
+
+    pub use crate::EXECUTION_ID;
 }
 use prelude::*;
 
+lazy_static! {
+    pub static ref EXECUTION_ID: String = {
+        if cfg!(debug_assertions) {
+            "local".to_string()
+        } else {
+            const ALPHA_NUM: [char; 62] = [
+                'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p',
+                'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F',
+                'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
+                'W', 'X', 'Y', 'Z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+            ];
+            nanoid!(16, &ALPHA_NUM)
+        }
+    };
+}
+
 #[derive(Clone)]
 pub struct AppState {
-    cfg: Arc<Config>,
-    bucket: Bucket,
-    db: MySqlPool,
+    pub cfg: Arc<Config>,
+    pub bucket: Bucket,
+    pub db: MySqlPool,
+    pub pubsub: Arc<PubSubClients>,
+    pub game_broadcasts: Arc<RwLock<HashMap<String, GameBroadcast>>>,
+}
+
+#[derive(Clone)]
+pub struct GameBroadcast {
+    pub to_host: broadcast::Sender<PlayerAction>,
+    pub to_players: broadcast::Sender<HostAction>,
 }
 
 #[tokio::main]
 async fn main() -> Result {
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
+        // .with_max_level(tracing::Level::DEBUG)
         .init();
 
     let cfg = Arc::new(config::load()?);
 
-    let bucket = s3_bucket(&cfg)?;
+    let bucket = init::s3::init_s3_bucket(&cfg)?;
+    let db = init::db::init_mysql_pool(&cfg).await?;
+    let session_store = init::session::init_session_store(&cfg, db.clone()).await?;
+    let pubsub = init::pubsub::init_pubsub(&cfg).await?;
+    let game_broadcasts: Arc<RwLock<HashMap<String, GameBroadcast>>> =
+        Arc::new(RwLock::new(HashMap::new()));
 
-    let db = MySqlPool::connect(&cfg.db_connection_url).await?;
-    sqlx::migrate!().run(&db).await?;
+    {
+        let pubsub = pubsub.clone();
+        let game_broadcasts = game_broadcasts.clone();
 
-    let session_store = sessions::store::build(&cfg, db.clone()).await?;
+        tokio::spawn(async move {
+            let mut stream = pubsub.host_actions.subscribe().await.unwrap();
 
-    let addr = format!("0.0.0.0:{}", cfg.server_port.unwrap()).parse()?;
+            while let Some(value) = stream.next().await {
+                println!("GOOGLE PUBSUB(host_actions): {:#?}", value);
+                if let Ok(game_broadcasts) = game_broadcasts.read() {
+                    if let Some(broadcast) = game_broadcasts.get(&value.game_code) {
+                        let _ = broadcast.to_players.send(value);
+                    }
+                }
+            }
+        });
+    }
 
-    let state = AppState { cfg, bucket, db };
+    {
+        let pubsub = pubsub.clone();
+        let game_broadcasts = game_broadcasts.clone();
+
+        tokio::spawn(async move {
+            let mut stream = pubsub.player_actions.subscribe().await.unwrap();
+
+            while let Some(value) = stream.next().await {
+                println!("GOOGLE PUBSUB(player_actions): {:#?}", value);
+                if let Ok(game_broadcasts) = game_broadcasts.read() {
+                    if let Some(broadcast) = game_broadcasts.get(&value.game_code) {
+                        let _ = broadcast.to_host.send(value);
+                    }
+                }
+            }
+        });
+    }
+
+    let addr = format!("[::]:{}", cfg.server_port.unwrap()).parse()?;
+
+    let state = AppState {
+        cfg,
+        bucket,
+        db,
+        pubsub,
+        game_broadcasts,
+    };
 
     // TODO: Background job to clean up expired db & session records
 
@@ -94,7 +171,11 @@ async fn main() -> Result {
         .layer(DefaultBodyLimit::max(64 * MB))
         .layer(session_service)
         .layer(cors)
-        .layer(CompressionLayer::new())
+        .layer(
+            compression::CompressionLayer::new().compress_when(CustomCompression {
+                fallback: compression::DefaultPredicate::new(),
+            }),
+        )
         .layer(TimeoutLayer::new(Duration::from_secs(30)));
 
     Server::bind(&addr)
@@ -104,19 +185,24 @@ async fn main() -> Result {
     return Ok(());
 }
 
-fn s3_bucket(cfg: &Config) -> Result<Bucket> {
-    return Ok(Bucket::new(
-        &cfg.r2_bucket,
-        Region::R2 {
-            account_id: cfg.r2_account_id.clone(),
-        },
-        Credentials::new(
-            Some(&cfg.r2_s3_access_key_id),
-            Some(&cfg.r2_s3_secret_access_key),
-            None,
-            None,
-            None,
-        )?,
-    )?
-    .with_path_style());
+#[derive(Clone)]
+struct CustomCompression {
+    fallback: compression::DefaultPredicate,
+}
+
+impl compression::Predicate for CustomCompression {
+    fn should_compress<B>(&self, response: &axum::http::Response<B>) -> bool
+    where
+        B: axum::body::HttpBody,
+    {
+        if let Some(value) = response.headers().get("content-type") {
+            if let Ok(value) = value.to_str() {
+                if value == "text/event-stream" {
+                    return false;
+                }
+            }
+        }
+
+        return self.fallback.should_compress(response);
+    }
 }
