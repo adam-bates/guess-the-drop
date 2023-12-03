@@ -1,16 +1,24 @@
-<h2 class="text-5xl font-bold">Game code: {{ game.game_code }}</h2>
-<h2 class="text-5xl font-bold">Twitch name: {{ user.username }}</h2>
-<p>You are a player. You have {{ player.points }} points.</p>
-<h3 class="text-4xl font-bold">THIS GAME IS FINISHED</h3>
+<h2 class="text-5xl my-2"><strong class="font-bold">{{ game.name }}</strong> by <em>{{ host.username }}</em></h2>
+<h3 class="p-1"><span id="created_at"></span></h3>
+
+<p>This game is finished.</p>
 
 <div class="divider"></div>
 
-<h3>Name: {{ game.name }}</h3>
-<h3>Status: {{ game.status }}</h3>
-<h3>Created At: {{ game.created_at }}</h3>
-<h3>Active At: {{ game.active_at }}</h3>
-<h3>Reward Message: {% if let Some(msg) = game.reward_message %} {{ msg }} {% endif %}</h3>
-<h3>Total Reward Message: {% if let Some(msg) = game.total_reward_message %} {{ msg }} {% endif %}</h3>
+<div class="stats stats-vertical lg:stats-horizontal shadow">
+    <div class="stat">
+        <div class="stat-title">Total Drops</div>
+        <div class="stat-value">{{ drops_count }}</div>
+    </div>
+
+    <div class="stat">
+        <div class="stat-title">Your Points</div>
+        <div class="stat-value">{{ player.points }}</div>
+        {% if is_winner %}
+            <div class="stat-desc">You won!</div>
+        {% endif %}
+    </div>
+</div>
 
 <div class="divider"></div>
 

@@ -10,6 +10,12 @@
 
 {% block scripts %}
     <script type="text/javascript">
+        // Created At
+        document.getElementById("created_at").innerText = new Date({{ game.created_at * 1000 }}).toLocaleString();
+
+        document.body.addEventListener("apply_created_at", function (evt) {
+            document.getElementById("created_at").innerText = new Date({{ game.created_at * 1000 }}).toLocaleString();
+        });
     </script>
 {% endblock %}
 

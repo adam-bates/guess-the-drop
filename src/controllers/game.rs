@@ -311,12 +311,15 @@ ORDER BY status ASC, created_at DESC
 #[template(path = "game-as-player.html")]
 struct GameAsPlayerTemplate {
     game: Game,
+    host: User,
     guess: Option<PlayerGuess>,
     items: Vec<GameItemWithGuessCount>,
     user: User,
     player: GamePlayer,
+    drops_count: i64,
     img_base_uri: String,
     is_finished: bool,
+    is_winner: bool,
 }
 
 #[derive(Template, Clone)]
@@ -325,6 +328,10 @@ struct GameAsHostTemplate {
     game: Game,
     items: Vec<GameItemWithGuessCount>,
     user: User,
+    players_count: i64,
+    drops_count: i64,
+    leaders: String,
+    lead_points: i32,
     img_base_uri: String,
 }
 
@@ -332,9 +339,12 @@ struct GameAsHostTemplate {
 #[template(path = "finished-game-as-player.html")]
 struct FinishedGameAsPlayerTemplate {
     game: Game,
+    host: User,
     items: Vec<GameItemWithGuessCount>,
     user: User,
     player: GamePlayer,
+    drops_count: i64,
+    is_winner: bool,
     img_base_uri: String,
 }
 
@@ -344,6 +354,10 @@ struct FinishedGameAsHostTemplate {
     game: Game,
     items: Vec<GameItemWithGuessCount>,
     user: User,
+    players_count: i64,
+    drops_count: i64,
+    leaders: String,
+    lead_points: i32,
     img_base_uri: String,
 }
 
@@ -395,16 +409,51 @@ WHERE
     .fetch_all(&state.db)
     .await?;
 
+    let host = sqlx::query_as("SELECT * FROM users WHERE user_id = ?")
+        .bind(&game.user_id)
+        .fetch_one(&state.db)
+        .await?;
+
+    let drops_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = ?")
+            .bind(&game_code)
+            .fetch_optional(&state.db)
+            .await?
+            .unwrap_or(0);
+
     if game.status != GAME_STATUS_ACTIVE {
-        // TODO: Include all users and winners if host (?)
-        // TODO: Include winning points and whether user won or lost if not host (?)
+        let lead_points: Option<Option<i32>> =
+            sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = ?")
+                .bind(&game_code)
+                .fetch_optional(&state.db)
+                .await?;
+        let lead_points = lead_points.flatten().unwrap_or(0);
 
         if game.user_id == user.user_id {
+            let players_count: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM game_players WHERE game_code = ?")
+                    .bind(&game_code)
+                    .fetch_optional(&state.db)
+                    .await?
+                    .unwrap_or(0);
+
+            let leaders: Vec<String> =
+        sqlx::query_scalar("SELECT users.username FROM game_players INNER JOIN users ON users.user_id = game_players.user_id WHERE game_code = ? AND points = ?")
+            .bind(&game_code)
+            .bind(&lead_points)
+            .fetch_all(&state.db)
+            .await?;
+            let leaders = leaders.join(", ");
+
             return Ok(Html(FinishedGameAsHostTemplate {
                 img_base_uri: state.cfg.r2_bucket_public_url.clone(),
                 game,
                 items,
                 user,
+                players_count,
+                drops_count,
+                leaders,
+                lead_points,
             })
             .into_response());
         }
@@ -423,9 +472,12 @@ WHERE
         return Ok(Html(FinishedGameAsPlayerTemplate {
             img_base_uri: state.cfg.r2_bucket_public_url.clone(),
             game,
+            host,
             items,
             user,
+            is_winner: player.points == lead_points,
             player,
+            drops_count,
         })
         .into_response());
     }
@@ -444,12 +496,38 @@ WHERE
         });
     }
 
+    let lead_points: Option<Option<i32>> =
+        sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = ?")
+            .bind(&game_code)
+            .fetch_optional(&state.db)
+            .await?;
+    let lead_points = lead_points.flatten().unwrap_or(0);
+
     if game.user_id == user.user_id {
+        let players_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM game_players WHERE game_code = ?")
+                .bind(&game_code)
+                .fetch_optional(&state.db)
+                .await?
+                .unwrap_or(0);
+
+        let leaders: Vec<String> =
+        sqlx::query_scalar("SELECT users.username FROM game_players INNER JOIN users ON users.user_id = game_players.user_id WHERE game_code = ? AND points = ?")
+            .bind(&game_code)
+            .bind(&lead_points)
+            .fetch_all(&state.db)
+            .await?;
+        let leaders = leaders.join(", ");
+
         return Ok(Html(GameAsHostTemplate {
             img_base_uri: state.cfg.r2_bucket_public_url.clone(),
             game,
             items,
             user,
+            players_count,
+            drops_count,
+            lead_points,
+            leaders,
         })
         .into_response());
     }
@@ -499,10 +577,13 @@ WHERE
     return Ok(Html(GameAsPlayerTemplate {
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
         game,
+        host,
         guess,
         items,
         user,
+        is_winner: player.points == lead_points,
         player,
+        drops_count,
         is_finished: false,
     })
     .into_response());
@@ -530,6 +611,20 @@ async fn game_x_board(
         return Ok(Redirect::to("/").into_response());
     };
 
+    let drops_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = ?")
+            .bind(&game_code)
+            .fetch_optional(&state.db)
+            .await?
+            .unwrap_or(0);
+
+    let lead_points: Option<Option<i32>> =
+        sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = ?")
+            .bind(&game_code)
+            .fetch_optional(&state.db)
+            .await?;
+    let lead_points = lead_points.flatten().unwrap_or(0);
+
     if game.user_id == user.user_id {
         let items: Vec<GameItemWithGuessCount> = sqlx::query_as(
             r#"
@@ -552,11 +647,30 @@ WHERE
         .fetch_all(&state.db)
         .await?;
 
+        let players_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM game_players WHERE game_code = ?")
+                .bind(&game_code)
+                .fetch_optional(&state.db)
+                .await?
+                .unwrap_or(0);
+
+        let leaders: Vec<String> =
+        sqlx::query_scalar("SELECT users.username FROM game_players INNER JOIN users ON users.user_id = game_players.user_id WHERE game_code = ? AND points = ?")
+            .bind(&game_code)
+            .bind(&lead_points)
+            .fetch_all(&state.db)
+            .await?;
+        let leaders = leaders.join(", ");
+
         return Ok(Html(GameAsHostBoardTemplate {
             img_base_uri: state.cfg.r2_bucket_public_url.clone(),
             game,
             items,
             user,
+            players_count,
+            drops_count,
+            leaders,
+            lead_points,
         })
         .into_response());
     }
@@ -585,12 +699,20 @@ WHERE
 
     let is_finished = game.status.as_str() != GAME_STATUS_ACTIVE;
 
+    let host = sqlx::query_as("SELECT * FROM users WHERE user_id = ?")
+        .bind(&game.user_id)
+        .fetch_one(&state.db)
+        .await?;
+
     return Ok(Html(GameAsPlayerBoardTemplate {
         game,
+        host,
         guess,
         user,
         items,
+        is_winner: game_player.points == lead_points,
         player: game_player,
+        drops_count,
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
         is_finished,
     })
@@ -603,6 +725,10 @@ struct GameAsHostBoardTemplate {
     game: Game,
     items: Vec<GameItemWithGuessCount>,
     user: User,
+    players_count: i64,
+    drops_count: i64,
+    leaders: String,
+    lead_points: i32,
     img_base_uri: String,
 }
 
@@ -669,11 +795,44 @@ WHERE
     .fetch_all(&state.db)
     .await?;
 
+    let players_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM game_players WHERE game_code = ?")
+            .bind(&game_code)
+            .fetch_optional(&state.db)
+            .await?
+            .unwrap_or(0);
+
+    let drops_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = ?")
+            .bind(&game_code)
+            .fetch_optional(&state.db)
+            .await?
+            .unwrap_or(0);
+
+    let lead_points: Option<Option<i32>> =
+        sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = ?")
+            .bind(&game_code)
+            .fetch_optional(&state.db)
+            .await?;
+    let lead_points = lead_points.flatten().unwrap_or(0);
+
+    let leaders: Vec<String> =
+        sqlx::query_scalar("SELECT users.username FROM game_players INNER JOIN users ON users.user_id = game_players.user_id WHERE game_code = ? AND points = ?")
+            .bind(&game_code)
+            .bind(&lead_points)
+            .fetch_all(&state.db)
+            .await?;
+    let leaders = leaders.join(", ");
+
     return Ok(Html(GameAsHostBoardTemplate {
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
         game,
         items,
         user,
+        players_count,
+        drops_count,
+        lead_points,
+        leaders,
     })
     .into_response());
 }
@@ -741,11 +900,44 @@ WHERE
     .fetch_all(&state.db)
     .await?;
 
+    let players_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM game_players WHERE game_code = ?")
+            .bind(&game_code)
+            .fetch_optional(&state.db)
+            .await?
+            .unwrap_or(0);
+
+    let drops_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = ?")
+            .bind(&game_code)
+            .fetch_optional(&state.db)
+            .await?
+            .unwrap_or(0);
+
+    let lead_points: Option<Option<i32>> =
+        sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = ?")
+            .bind(&game_code)
+            .fetch_optional(&state.db)
+            .await?;
+    let lead_points = lead_points.flatten().unwrap_or(0);
+
+    let leaders: Vec<String> =
+        sqlx::query_scalar("SELECT users.username FROM game_players INNER JOIN users ON users.user_id = game_players.user_id WHERE game_code = ? AND points = ?")
+            .bind(&game_code)
+            .bind(&lead_points)
+            .fetch_all(&state.db)
+            .await?;
+    let leaders = leaders.join(", ");
+
     return Ok(Html(GameAsHostBoardTemplate {
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
         game,
         items,
         user,
+        players_count,
+        drops_count,
+        leaders,
+        lead_points,
     })
     .into_response());
 }
@@ -927,11 +1119,44 @@ WHERE
     .fetch_all(&state.db)
     .await?;
 
+    let players_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM game_players WHERE game_code = ?")
+            .bind(&game_code)
+            .fetch_optional(&state.db)
+            .await?
+            .unwrap_or(0);
+
+    let drops_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = ?")
+            .bind(&game_code)
+            .fetch_optional(&state.db)
+            .await?
+            .unwrap_or(0);
+
+    let lead_points: Option<Option<i32>> =
+        sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = ?")
+            .bind(&game_code)
+            .fetch_optional(&state.db)
+            .await?;
+    let lead_points = lead_points.flatten().unwrap_or(0);
+
+    let leaders: Vec<String> =
+        sqlx::query_scalar("SELECT users.username FROM game_players INNER JOIN users ON users.user_id = game_players.user_id WHERE game_code = ? AND points = ?")
+            .bind(&game_code)
+            .bind(&lead_points)
+            .fetch_all(&state.db)
+            .await?;
+    let leaders = leaders.join(", ");
+
     return Ok(Html(GameAsHostBoardTemplate {
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
         game,
         items,
         user,
+        players_count,
+        drops_count,
+        leaders,
+        lead_points,
     })
     .into_response());
 }
@@ -940,12 +1165,15 @@ WHERE
 #[template(path = "game-as-player-board.html")]
 struct GameAsPlayerBoardTemplate {
     game: Game,
+    host: User,
     guess: Option<PlayerGuess>,
     items: Vec<GameItem>,
     user: User,
     player: GamePlayer,
+    drops_count: i64,
     img_base_uri: String,
     is_finished: bool,
+    is_winner: bool,
 }
 
 async fn game_x_guess_item(
@@ -1061,12 +1289,34 @@ async fn game_x_guess_item(
         .fetch_all(&state.db)
         .await?;
 
+    let host = sqlx::query_as("SELECT * FROM users WHERE user_id = ?")
+        .bind(&game.user_id)
+        .fetch_one(&state.db)
+        .await?;
+
+    let drops_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = ?")
+            .bind(&game_code)
+            .fetch_optional(&state.db)
+            .await?
+            .unwrap_or(0);
+
+    let lead_points: Option<Option<i32>> =
+        sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = ?")
+            .bind(&game_code)
+            .fetch_optional(&state.db)
+            .await?;
+    let lead_points = lead_points.flatten().unwrap_or(0);
+
     return Ok(Html(GameAsPlayerBoardTemplate {
         game,
+        host,
         guess: Some(guess),
         user,
         items,
+        is_winner: game_player.points == lead_points,
         player: game_player,
+        drops_count,
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
         is_finished: false,
     })
@@ -1330,8 +1580,9 @@ WHERE
             let total: i64 =
                 sqlx::query_scalar("SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = ?")
                     .bind(&game_code)
-                    .fetch_one(&state.db)
-                    .await?;
+                    .fetch_optional(&state.db)
+                    .await?
+                    .unwrap_or(0);
 
             let mut messages = vec![];
 

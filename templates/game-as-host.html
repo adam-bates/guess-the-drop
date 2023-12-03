@@ -8,3 +8,33 @@
     </div>
 {% endblock %}
 
+{% block scripts %}
+    <script type="text/javascript" defer>
+        // Created At
+        document.getElementById("created_at").innerText = new Date({{ game.created_at * 1000 }}).toLocaleString();
+
+        document.body.addEventListener("apply_created_at", function (evt) {
+            document.getElementById("created_at").innerText = new Date({{ game.created_at * 1000 }}).toLocaleString();
+        });
+
+        // Copy share link
+        let el = document.getElementById("copy_share_link");
+        let txt = el.innerText;
+        let timer = null;
+
+        function copyShareLink() {
+            navigator.clipboard.writeText("https://guessthedrop.com/join?code={{ game.game_code }}");
+
+            if (timer) {
+                clearTimeout(timer);
+            }
+
+            el.innerText = "Copied!";
+
+            timer = setTimeout(() => {
+                el.innerText = txt;
+            }, 5000);
+        }
+    </script>
+{% endblock %}
+

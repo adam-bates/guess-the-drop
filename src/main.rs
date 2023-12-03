@@ -28,7 +28,7 @@ use pubsub::{HostAction, PlayerAction, PubSubClients};
 use reqwest::{header::LOCATION, Method};
 use result::AppError;
 use s3::Bucket;
-use sqlx::{MySqlConnection, MySqlPool};
+use sqlx::MySqlPool;
 use tokio::sync::broadcast;
 use tower::ServiceBuilder;
 use tower_http::{

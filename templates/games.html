@@ -74,6 +74,8 @@
                                                     <li>There {{ are_were }} {{ players_count }} players</li>
                                                 {% endif %}
                                             {% endif %}
+                                        {% else %}
+                                            <li>There {{ are_were }} no players</li>
                                         {% endif %}
 
                                         {% if game.status != "ACTIVE" %}
@@ -108,6 +110,8 @@
                                                     {% endif %}
                                                 {% endif %}
                                             {% endif %}
+                                        {% else %}
+                                            <li>Nothing {{ has_been_was }} dropped{{ so_far_ }}</li>
                                         {% endif %}
                                     </ul>
                                 </td>

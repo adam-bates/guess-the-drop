@@ -30,10 +30,16 @@ impl<T: Template> IntoResponse for Html<T> {
             Ok(body) => {
                 let body = minify_html::minify(body.as_bytes(), &minify_html::Cfg::default());
 
-                let headers = [(
-                    axum::http::header::CONTENT_TYPE,
-                    axum::http::HeaderValue::from_static(T::MIME_TYPE),
-                )];
+                let headers = [
+                    (
+                        axum::http::header::CONTENT_TYPE,
+                        axum::http::HeaderValue::from_static(T::MIME_TYPE),
+                    ),
+                    (
+                        axum::http::HeaderName::from_static("hx-trigger-after-swap"),
+                        axum::http::HeaderValue::from_static("apply_created_at"),
+                    ),
+                ];
 
                 return (headers, body).into_response();
             }
