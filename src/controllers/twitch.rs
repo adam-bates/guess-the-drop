@@ -217,9 +217,10 @@ async fn twitch_callback(
         .execute(&state.db)
         .await?;
 
-    sqlx::query("INSERT INTO session_auths (sid, user_id, access_token, refresh_token, created_at, expiry, can_chat) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    sqlx::query("INSERT INTO session_auths (sid, user_id, client_id, access_token, refresh_token, created_at, expiry, can_chat) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
         .bind(&sid)
         .bind(token.user_id.as_str())
+        .bind(state.cfg.twitch_client_id.as_str())
         .bind(&token.access_token.secret())
         .bind(&token.refresh_token.as_ref().map(|t| t.secret()).unwrap_or_default())
         .bind(now_s)

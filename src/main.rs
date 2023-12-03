@@ -349,6 +349,7 @@ async fn send_chat_messages(cfg: Arc<Config>, db: MySqlPool) -> Result {
                     DbTokenStorage {
                         user_id: user.user_id.clone(),
                         db: db.clone(),
+                        cfg: cfg.clone(),
                     },
                 ),
             );
@@ -399,6 +400,7 @@ async fn send_chat_messages(cfg: Arc<Config>, db: MySqlPool) -> Result {
 struct DbTokenStorage {
     user_id: String,
     db: MySqlPool,
+    cfg: Arc<Config>,
 }
 
 #[async_trait]
@@ -408,11 +410,13 @@ impl twitch_irc::login::TokenStorage for DbTokenStorage {
 
     // Load the currently stored token from the storage.
     async fn load_token(&mut self) -> Result<UserAccessToken> {
-        let session: Option<SessionAuth> =
-            sqlx::query_as("SELECT * FROM session_auths WHERE user_id = ? AND can_chat = true")
-                .bind(&self.user_id)
-                .fetch_optional(&self.db)
-                .await?;
+        let session: Option<SessionAuth> = sqlx::query_as(
+            "SELECT * FROM session_auths WHERE user_id = ? AND client_id = ? AND can_chat = true",
+        )
+        .bind(&self.user_id)
+        .bind(self.cfg.twitch_client_id.as_str())
+        .fetch_optional(&self.db)
+        .await?;
 
         let Some(session) = session else {
             return Err(AppError(anyhow::anyhow!(
@@ -436,12 +440,13 @@ impl twitch_irc::login::TokenStorage for DbTokenStorage {
     // After `update_token()` completes, the `load_token()` method should then return
     // that token for future invocations
     async fn update_token(&mut self, token: &UserAccessToken) -> Result {
-        sqlx::query("UPDATE session_auths SET access_token = ?, refresh_token = ?, created_at = ?, expiry = ? WHERE user_id = ? AND can_chat = true")
+        sqlx::query("UPDATE session_auths SET access_token = ?, refresh_token = ?, created_at = ?, expiry = ? WHERE user_id = ? AND client_id = ? AND can_chat = true")
             .bind(&token.access_token)
             .bind(&token.refresh_token)
             .bind(token.created_at.timestamp() as u64)
             .bind(token.expires_at.map(|e| e.timestamp() as u64))
             .bind(&self.user_id)
+            .bind(self.cfg.twitch_client_id.as_str())
             .execute(&self.db)
             .await?;
 

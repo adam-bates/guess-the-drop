@@ -2,6 +2,7 @@ CREATE TABLE IF NOT EXISTS session_auths (
 	id SERIAL PRIMARY KEY,
 	sid VARCHAR(128) NOT NULL,
     user_id VARCHAR(128) NOT NULL,
+	client_id VARCHAR(128) NOT NULL,
     access_token VARCHAR(1024) NOT NULL,
     refresh_token VARCHAR(1024) NOT NULL,
 	created_at BIGINT UNSIGNED NOT NULL,
