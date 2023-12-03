@@ -114,9 +114,9 @@ pub struct PlayerAction {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum PlayerActionType {
-    Join { players_count: i64 },
-    Guess { item_id: u64 },
-    ChangeGuess { from_item_id: u64, to_item_id: u64 },
+    Join { new_players_count: i64 },
+    Guess { item_id: u64, new_guess_count: i32 },
+    UndoGuess { item_id: u64, new_guess_count: i32 },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

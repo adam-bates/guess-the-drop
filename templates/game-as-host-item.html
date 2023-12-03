@@ -3,14 +3,16 @@
         <h2 class="card-title">
             {{ item.name }}
 
-            {% if let Some(guess_count) = item.guess_count %}
-                {% if let 0 = guess_count %}
-                {% else if let 1 = guess_count %}
-                    <span class="badge">1 guess</span>
-                {% else %}
-                    <span class="badge">{{ guess_count }} guesses</span>
+            <span sse-swap="guesses_{{ item.game_item_id }}">
+                {% if let Some(guess_count) = item.guess_count %}
+                    {% if let 0 = guess_count %}
+                    {% else if let 1 = guess_count %}
+                        <span class="badge">1 guess</span>
+                    {% else %}
+                        <span class="badge">{{ guess_count }} guesses</span>
+                    {% endif %}
                 {% endif %}
-            {% endif %}
+            </span>
         </h2>
 
         <div class="card-actions flex flex-row justify-end gap-4 items-end">

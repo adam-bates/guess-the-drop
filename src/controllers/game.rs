@@ -575,7 +575,9 @@ WHERE
                     .publish(PlayerAction {
                         game_code,
                         user_id,
-                        typ: PlayerActionType::Join { players_count },
+                        typ: PlayerActionType::Join {
+                            new_players_count: players_count,
+                        },
                     })
                     .await?) as Result;
             })
@@ -1378,15 +1380,42 @@ async fn game_x_guess_item(
             .execute(&state.db)
             .await?;
 
+        let from_new_guess_count = sqlx::query_scalar("SELECT COUNT(*) FROM player_guesses WHERE game_code = ? AND item_id = ? AND outcome_id IS NULL")
+            .bind(&game_code)
+            .bind(&guess.item_id)
+            .fetch_optional(&state.db)
+            .await?
+            .unwrap_or(0);
+
+        let to_new_guess_count = sqlx::query_scalar("SELECT COUNT(*) FROM player_guesses WHERE game_code = ? AND item_id = ? AND outcome_id IS NULL")
+            .bind(&game_code)
+            .bind(&game_item.game_item_id)
+            .fetch_optional(&state.db)
+            .await?
+            .unwrap_or(0);
+
         state
             .pubsub
             .player_actions
             .publish(PlayerAction {
                 game_code: game_code.clone(),
                 user_id: user.user_id.clone(),
-                typ: PlayerActionType::ChangeGuess {
-                    from_item_id: guess.item_id.clone(),
-                    to_item_id: game_item.game_item_id.clone(),
+                typ: PlayerActionType::UndoGuess {
+                    item_id: guess.item_id.clone(),
+                    new_guess_count: from_new_guess_count,
+                },
+            })
+            .await?;
+
+        state
+            .pubsub
+            .player_actions
+            .publish(PlayerAction {
+                game_code: game_code.clone(),
+                user_id: user.user_id.clone(),
+                typ: PlayerActionType::Guess {
+                    item_id: game_item.game_item_id.clone(),
+                    new_guess_count: to_new_guess_count,
                 },
             })
             .await?;
@@ -1403,6 +1432,13 @@ async fn game_x_guess_item(
             .execute(&state.db)
             .await?;
 
+        let new_guess_count = sqlx::query_scalar("SELECT COUNT(*) FROM player_guesses WHERE game_code = ? AND item_id = ? AND outcome_id IS NULL")
+            .bind(&game_code)
+            .bind(&game_item.game_item_id)
+            .fetch_optional(&state.db)
+            .await?
+            .unwrap_or(0);
+
         state
             .pubsub
             .player_actions
@@ -1411,6 +1447,7 @@ async fn game_x_guess_item(
                 user_id: user.user_id.clone(),
                 typ: PlayerActionType::Guess {
                     item_id: game_item.game_item_id.clone(),
+                    new_guess_count,
                 },
             })
             .await?;
@@ -1769,6 +1806,22 @@ WHERE
     return Ok(Redirect::to(&format!("/games/{game_code}")).into_response());
 }
 
+#[derive(Template)]
+#[template(
+    source = r#"
+{% if let 0 = guess_count %}
+{% else if let 1 = guess_count %}
+    <span class="badge">1 guess</span>
+{% else %}
+    <span class="badge">{{ guess_count }} guesses</span>
+{% endif %}
+"#,
+    ext = "html"
+)]
+struct GuessCountTemplate {
+    guess_count: i32,
+}
+
 async fn host_sse(
     Path(game_code): Path<String>,
     session: Session,
@@ -1829,15 +1882,39 @@ async fn host_sse(
     let stream = BroadcastStream::new(rx).map(move |event| -> Result<Event> {
         match &event?.typ {
             PlayerActionType::Join {
-                players_count: player_count,
+                new_players_count: player_count,
             } => {
                 return Ok(Event::default()
-                    .event("join")
+                    .event("players_count")
                     .data(player_count.to_string()))
             }
 
-            PlayerActionType::Guess { .. } | PlayerActionType::ChangeGuess { .. } => {
-                return Ok(Event::default().event("player_action"))
+            PlayerActionType::Guess {
+                item_id,
+                new_guess_count,
+            } => {
+                let data = GuessCountTemplate {
+                    guess_count: *new_guess_count,
+                }
+                .render()?;
+
+                return Ok(Event::default()
+                    .event(format!("guesses_{item_id}"))
+                    .data(data));
+            }
+
+            PlayerActionType::UndoGuess {
+                item_id,
+                new_guess_count,
+            } => {
+                let data = GuessCountTemplate {
+                    guess_count: *new_guess_count,
+                }
+                .render()?;
+
+                return Ok(Event::default()
+                    .event(format!("guesses_{item_id}"))
+                    .data(data));
             }
         }
     });

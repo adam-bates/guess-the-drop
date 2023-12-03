@@ -1,10 +1,8 @@
 {% extends "authed-base.html" %}
 
 {% block content %}
-    <div hx-ext="sse" sse-connect="/games/{{ game.game_code }}/sse/host">
-        <div id="game_board" hx-get="/games/{{ game.game_code }}/x/board" hx-trigger="sse:player_action">
-            {% include "game-as-host-board.html" %}
-        </div>
+    <div id="game_board">
+        {% include "game-as-host-board.html" %}
     </div>
 {% endblock %}
 
