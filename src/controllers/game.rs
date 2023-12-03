@@ -1997,37 +1997,21 @@ async fn player_sse(
     let rx = broadcast.to_players.subscribe();
 
     let stream = BroadcastStream::new(rx).map(|event| -> Result<Event> {
-        // let name = match &event?.typ {
-        //     HostActionType::Lock => "lock",
-        //     HostActionType::Unlock => "unlock",
-        //     HostActionType::Choose { .. } => "choose",
-        //     HostActionType::Enable { .. } => "enable",
-        //     HostActionType::Disable { .. } => "disable",
-        // };
-        let name = "host_action";
+        match &event?.typ {
+            HostActionType::Disable { item_id } => {
+                return Ok(Event::default()
+                    .event(format!("update_item_{item_id}"))
+                    .data(""))
+            }
 
-        return Ok(Event::default().event(name).data(name));
-
-        // return tokio::runtime::Runtime::new()?.block_on(async move {
-        //     let host_action = event?;
-        //     match &host_action.typ {
-        //         HostActionType::Lock => {
-        //             // let res = game_x_lock(
-        //             //     Path((game_code.clone())),
-        //             //     session.clone(),
-        //             //     State(state.clone()),
-        //             // )
-        //             // .await?;
-        //         }
-
-        //         _ => compile_error!(),
-        //     }
-
-        //     return Ok(Event::default().data(format!(
-        //         "<p>{:#?}</p>",
-        //         serde_json::to_string_pretty(&host_action),
-        //     )));
-        // });
+            HostActionType::Lock
+            | HostActionType::Unlock
+            | HostActionType::Finish
+            | HostActionType::Enable { .. }
+            | HostActionType::Choose { .. } => {
+                return Ok(Event::default().event("host_action").data(""))
+            }
+        }
     });
 
     return Ok(Sse::new(stream)

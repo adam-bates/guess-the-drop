@@ -1,44 +1,50 @@
 {% if is_finished %}
     {% include "finished-game-as-player-board.html" %}
 {% else %}
-    <h2 class="text-5xl my-2"><strong class="font-bold">{{ game.name }}</strong> by <em>{{ host.username }}</em></h2>
-    <h3 class="p-1"><span id="created_at"></span></h3>
+    <div hx-ext="sse" sse-connect="/games/{{ game.game_code }}/sse/player">
+        <div id="game_board" hx-get="/games/{{ game.game_code }}/x/board" hx-trigger="sse:host_action">
+            <h2 class="text-5xl my-2"><strong class="font-bold">{{ game.name }}</strong> by <em>{{ host.username }}</em></h2>
+            <h3 class="p-1"><span id="created_at"></span></h3>
 
-    <div class="divider"></div>
+            <div class="divider"></div>
 
-    <div class="stats stats-vertical lg:stats-horizontal shadow">
-        <div class="stat">
-            <div class="stat-title">Total Drops</div>
-            <div class="stat-value">{{ drops_count }}</div>
-        </div>
+            <div class="stats stats-vertical lg:stats-horizontal shadow">
+                <div class="stat">
+                    <div class="stat-title">Total Drops</div>
+                    <div class="stat-value">{{ drops_count }}</div>
+                </div>
 
-        <div class="stat">
-            <div class="stat-title">Your Points</div>
-            <div class="stat-value">{{ player.points }}</div>
-        </div>
-    </div>
+                <div class="stat">
+                    <div class="stat-title">Your Points</div>
+                    <div class="stat-value">{{ player.points }}</div>
+                </div>
+            </div>
 
-    <div class="divider"></div>
+            <div class="divider"></div>
 
-    {% if game.is_locked %}
-        <div class="flex flex-row gap-2 items-center text-error">
-            <svg fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><rect height="11" rx="2" ry="2" width="18" x="3" y="11"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            <h3 class="text-lg">Guesses are locked</h3>
-        </div>
-    {% else %}
-        <div class="flex flex-row gap-2 items-center text-accent">
-            <svg viewBox="0 0 24 24" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" width="24" xmlns="http://www.w3.org/2000/svg"><rect height="10" rx="2" ry="2" width="16" x="4" y="12"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>
-            <h3 class="text-lg">Guesses are open</h3>
-        </div>
-    {% endif %}
-
-    <h2 class="text-xl">Guess which item will come next?</h2>
-
-    <div class="grid gap-4 xs:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 py-4">
-        {% for item in items %}
-            {% if item.enabled %}
-                {% include "game-as-player-item.html" %}
+            {% if game.is_locked %}
+                <div class="flex flex-row gap-2 items-center text-error">
+                    <svg fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><rect height="11" rx="2" ry="2" width="18" x="3" y="11"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    <h3 class="text-lg">Guesses are locked</h3>
+                </div>
+            {% else %}
+                <div class="flex flex-row gap-2 items-center text-accent">
+                    <svg viewBox="0 0 24 24" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" width="24" xmlns="http://www.w3.org/2000/svg"><rect height="10" rx="2" ry="2" width="16" x="4" y="12"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>
+                    <h3 class="text-lg">Guesses are open</h3>
+                </div>
             {% endif %}
-        {% endfor %}
+
+            <h2 class="text-xl">Guess which item will come next?</h2>
+
+            <div class="grid gap-4 xs:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 py-4">
+                {% for item in items %}
+                    {% if item.enabled %}
+                        <div sse-swap="update_item_{{ item.game_item_id }}">
+                            {% include "game-as-player-item.html" %}
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
     </div>
 {% endif %}
