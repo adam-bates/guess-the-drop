@@ -3,6 +3,7 @@ secrets/*
 
 /target
 /node_modules
+.sqlx
 
 .DS_Store
 

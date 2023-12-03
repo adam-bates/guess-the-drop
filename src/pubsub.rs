@@ -89,12 +89,17 @@ where
 
         let res: Result<T> = serde_json::from_slice(leaked).map_err(|e| e.into());
 
-        let data = match res {
-            Ok(data) => data.clone(),
-            Err(e) => Err(e).expect("Unexpected error while parsing message"),
+        let res = match res {
+            Ok(data) => Ok(data.clone()),
+            e => e,
         };
 
         drop(unsafe { Box::from_raw((leaked as *const Vec<u8>) as *mut Vec<u8>) });
+
+        let data = match res {
+            Ok(data) => data,
+            Err(e) => Err(e).expect("Unexpected error while parsing message"),
+        };
 
         return Some(data);
     }
@@ -109,7 +114,7 @@ pub struct PlayerAction {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum PlayerActionType {
-    Join,
+    Join { players_count: i64 },
     Guess { item_id: u64 },
     ChangeGuess { from_item_id: u64, to_item_id: u64 },
 }

@@ -27,7 +27,7 @@ use axum::{
     Form, Router,
 };
 use serde::Deserialize;
-use tokio::sync::broadcast;
+use tokio::{sync::broadcast, task::JoinHandle};
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt as _;
 use tower_sessions::Session;
@@ -332,6 +332,7 @@ struct GameAsHostTemplate {
     drops_count: i64,
     leaders: String,
     lead_points: i32,
+    base_uri: String,
     img_base_uri: String,
 }
 
@@ -520,6 +521,7 @@ WHERE
         let leaders = leaders.join(", ");
 
         return Ok(Html(GameAsHostTemplate {
+            base_uri: state.cfg.server_host_uri.clone(),
             img_base_uri: state.cfg.r2_bucket_public_url.clone(),
             game,
             items,
@@ -554,24 +556,81 @@ WHERE
             .execute(&state.db)
             .await?;
 
-        state
-            .pubsub
-            .player_actions
-            .publish(PlayerAction {
-                game_code: game_code.clone(),
-                user_id: user.user_id.clone(),
-                typ: PlayerActionType::Join,
-            })
-            .await?;
+        let jh1 = {
+            let game_code = game_code.clone();
+            let user_id = user.user_id.clone();
+            let db = state.db.clone();
+            let pubsub = state.pubsub.clone();
 
-        (
-            sqlx::query_as("SELECT * FROM game_players WHERE game_code = ? AND user_id = ?")
+            tokio::spawn(async move {
+                let players_count: i64 =
+                    sqlx::query_scalar("SELECT COUNT(*) FROM game_players WHERE game_code = ?")
+                        .bind(&game_code)
+                        .fetch_optional(&db)
+                        .await?
+                        .unwrap_or(0);
+
+                return Ok(pubsub
+                    .player_actions
+                    .publish(PlayerAction {
+                        game_code,
+                        user_id,
+                        typ: PlayerActionType::Join { players_count },
+                    })
+                    .await?) as Result;
+            })
+        };
+
+        let jh2 = if let Ok(now) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+            let now_s = now.as_secs();
+            let game_code = game_code.clone();
+            let db = state.db.clone();
+
+            Some(tokio::spawn(async move {
+                sqlx::query("UPDATE games SET active_at = ? WHERE game_code = ?")
+                    .bind(now_s)
+                    .bind(&game_code)
+                    .execute(&db)
+                    .await?;
+
+                return Ok(()) as Result;
+            }))
+        } else {
+            None
+        };
+
+        let jh3: JoinHandle<Result<GamePlayer>> = {
+            let game_code = game_code.clone();
+            let user_id = user.user_id.clone();
+            let db = state.db.clone();
+
+            tokio::spawn(async move {
+                return Ok(sqlx::query_as(
+                    "SELECT * FROM game_players WHERE game_code = ? AND user_id = ?",
+                )
                 .bind(&game_code)
-                .bind(&user.user_id)
-                .fetch_one(&state.db)
-                .await?,
-            None,
-        )
+                .bind(&user_id)
+                .fetch_one(&db)
+                .await?);
+            })
+        };
+
+        let gp = if let Some(jh2) = jh2 {
+            let (r1, r2, r3) = tokio::join! {
+                jh1, jh2, jh3,
+            };
+            r1??;
+            r2??;
+            r3??
+        } else {
+            let (r1, r3) = tokio::join! {
+                jh1, jh3,
+            };
+            r1??;
+            r3??
+        };
+
+        (gp, None)
     };
 
     return Ok(Html(GameAsPlayerTemplate {
@@ -611,23 +670,50 @@ async fn game_x_board(
         return Ok(Redirect::to("/").into_response());
     };
 
-    let drops_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = ?")
-            .bind(&game_code)
-            .fetch_optional(&state.db)
-            .await?
-            .unwrap_or(0);
+    let (drops_count, lead_points) = {
+        let jh1 = {
+            let game_code = game_code.clone();
+            let db = state.db.clone();
 
-    let lead_points: Option<Option<i32>> =
-        sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = ?")
-            .bind(&game_code)
-            .fetch_optional(&state.db)
-            .await?;
-    let lead_points = lead_points.flatten().unwrap_or(0);
+            tokio::spawn(async move {
+                return Ok(sqlx::query_scalar(
+                    "SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = ?",
+                )
+                .bind(&game_code)
+                .fetch_optional(&db)
+                .await?
+                .unwrap_or(0i64)) as Result<i64>;
+            })
+        };
+
+        let jh2 = {
+            let game_code = game_code.clone();
+            let db = state.db.clone();
+
+            tokio::spawn(async move {
+                let lead_points: Option<Option<i32>> =
+                    sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = ?")
+                        .bind(&game_code)
+                        .fetch_optional(&db)
+                        .await?;
+                return Ok(lead_points.flatten().unwrap_or(0)) as Result<i32>;
+            })
+        };
+
+        let (r1, r2) = tokio::join! { jh1, jh2 };
+
+        (r1??, r2??)
+    };
 
     if game.user_id == user.user_id {
-        let items: Vec<GameItemWithGuessCount> = sqlx::query_as(
-            r#"
+        let (items, players_count, leaders) = {
+            let jh1 = {
+                let game_code = game_code.clone();
+                let db = state.db.clone();
+
+                tokio::spawn(async move {
+                    let items = sqlx::query_as(
+                        r#"
 SELECT *
 FROM game_items
     LEFT OUTER JOIN (
@@ -641,26 +727,50 @@ FROM game_items
 WHERE
     game_code = ?
             "#,
-        )
-        .bind(&game_code)
-        .bind(&game_code)
-        .fetch_all(&state.db)
-        .await?;
+                    )
+                    .bind(&game_code)
+                    .bind(&game_code)
+                    .fetch_all(&db)
+                    .await?;
 
-        let players_count: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM game_players WHERE game_code = ?")
-                .bind(&game_code)
-                .fetch_optional(&state.db)
-                .await?
-                .unwrap_or(0);
+                    return Ok(items) as Result<Vec<GameItemWithGuessCount>>;
+                })
+            };
 
-        let leaders: Vec<String> =
-        sqlx::query_scalar("SELECT users.username FROM game_players INNER JOIN users ON users.user_id = game_players.user_id WHERE game_code = ? AND points = ?")
-            .bind(&game_code)
-            .bind(&lead_points)
-            .fetch_all(&state.db)
-            .await?;
-        let leaders = leaders.join(", ");
+            let jh2 = {
+                let game_code = game_code.clone();
+                let db = state.db.clone();
+
+                tokio::spawn(async move {
+                    return Ok(sqlx::query_scalar(
+                        "SELECT COUNT(*) FROM game_players WHERE game_code = ?",
+                    )
+                    .bind(&game_code)
+                    .fetch_optional(&db)
+                    .await?
+                    .unwrap_or(0i64)) as Result<i64>;
+                })
+            };
+
+            let jh3 = {
+                let game_code = game_code.clone();
+                let db = state.db.clone();
+
+                tokio::spawn(async move {
+                    let leaders: Vec<String> =
+                    sqlx::query_scalar("SELECT users.username FROM game_players INNER JOIN users ON users.user_id = game_players.user_id WHERE game_code = ? AND points = ?")
+                        .bind(&game_code)
+                        .bind(&lead_points)
+                        .fetch_all(&db)
+                        .await?;
+                    return Ok(leaders.join(", ")) as Result<String>;
+                })
+            };
+
+            let (r1, r2, r3) = tokio::join! { jh1, jh2, jh3 };
+
+            (r1??, r2??, r3??)
+        };
 
         return Ok(Html(GameAsHostBoardTemplate {
             img_base_uri: state.cfg.r2_bucket_public_url.clone(),
@@ -686,23 +796,54 @@ WHERE
         return Ok(Redirect::to("/").into_response());
     };
 
-    let guess: Option<PlayerGuess> = sqlx::query_as("SELECT * FROM player_guesses WHERE game_code = ? AND player_id = ? AND outcome_id IS NULL LIMIT 1")
-        .bind(&game_code)
-        .bind(&game_player.game_player_id)
-        .fetch_optional(&state.db)
-        .await?;
-
-    let items = sqlx::query_as("SELECT * FROM game_items WHERE game_code = ?")
-        .bind(&game_code)
-        .fetch_all(&state.db)
-        .await?;
-
     let is_finished = game.status.as_str() != GAME_STATUS_ACTIVE;
 
-    let host = sqlx::query_as("SELECT * FROM users WHERE user_id = ?")
-        .bind(&game.user_id)
-        .fetch_one(&state.db)
-        .await?;
+    let (guess, items, host) = {
+        let jh1 = {
+            let game_code = game_code.clone();
+            let game_player_id = game_player.game_player_id.clone();
+            let db = state.db.clone();
+
+            tokio::spawn(async move {
+                return Ok(sqlx::query_as("SELECT * FROM player_guesses WHERE game_code = ? AND player_id = ? AND outcome_id IS NULL LIMIT 1")
+                        .bind(&game_code)
+                        .bind(&game_player_id)
+                        .fetch_optional(&db)
+                        .await?) as Result<Option<PlayerGuess>>;
+            })
+        };
+
+        let jh2 = {
+            let game_code = game_code.clone();
+            let db = state.db.clone();
+
+            tokio::spawn(async move {
+                return Ok(
+                    sqlx::query_as("SELECT * FROM game_items WHERE game_code = ?")
+                        .bind(&game_code)
+                        .fetch_all(&db)
+                        .await?,
+                ) as Result<Vec<GameItem>>;
+            })
+        };
+
+        let jh3 = {
+            let user_id = game.user_id.clone();
+            let db = state.db.clone();
+
+            tokio::spawn(async move {
+                let host: User = sqlx::query_as("SELECT * FROM users WHERE user_id = ?")
+                    .bind(&user_id)
+                    .fetch_one(&db)
+                    .await?;
+                return Ok(host) as Result<User>;
+            })
+        };
+
+        let (r1, r2, r3) = tokio::join! { jh1, jh2, jh3 };
+
+        (r1??, r2??, r3??)
+    };
 
     return Ok(Html(GameAsPlayerBoardTemplate {
         game,
@@ -1686,14 +1827,19 @@ async fn host_sse(
     let rx = broadcast.to_host.subscribe();
 
     let stream = BroadcastStream::new(rx).map(move |event| -> Result<Event> {
-        // let name = match &event?.typ {
-        //     PlayerActionType::Join => "join",
-        //     PlayerActionType::Guess { .. } => "guess",
-        //     PlayerActionType::ChangeGuess { .. } => "change_guess",
-        // };
-        let name = "player_action";
+        match &event?.typ {
+            PlayerActionType::Join {
+                players_count: player_count,
+            } => {
+                return Ok(Event::default()
+                    .event("join")
+                    .data(player_count.to_string()))
+            }
 
-        return Ok(Event::default().event(name).data(name));
+            PlayerActionType::Guess { .. } | PlayerActionType::ChangeGuess { .. } => {
+                return Ok(Event::default().event("player_action"))
+            }
+        }
     });
 
     return Ok(Sse::new(stream)

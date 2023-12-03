@@ -2,7 +2,7 @@
 
 {% block content %}
     <div hx-ext="sse" sse-connect="/games/{{ game.game_code }}/sse/host">
-        <div id="game_board" hx-get="/games/{{ game.game_code }}/x/board" hx-trigger="sse:player_action throttle:1s">
+        <div id="game_board" hx-get="/games/{{ game.game_code }}/x/board" hx-trigger="sse:player_action">
             {% include "game-as-host-board.html" %}
         </div>
     </div>
@@ -23,7 +23,7 @@
         let timer = null;
 
         function copyShareLink() {
-            navigator.clipboard.writeText("https://guessthedrop.com/join?code={{ game.game_code }}");
+            navigator.clipboard.writeText("{{ base_uri }}/join?code={{ game.game_code }}");
 
             if (timer) {
                 clearTimeout(timer);
