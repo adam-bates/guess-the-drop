@@ -11,6 +11,7 @@ use std::{
     time::Duration,
 };
 
+use async_trait::async_trait;
 use axum::{
     error_handling::HandleErrorLayer,
     extract::DefaultBodyLimit,
@@ -19,13 +20,15 @@ use axum::{
     response::Response,
     Router, Server,
 };
-use headers::HeaderValue;
+use chrono::DateTime;
 use lazy_static::lazy_static;
+use models::{ChatMessage, SessionAuth, User};
 use nanoid::nanoid;
 use pubsub::{HostAction, PlayerAction, PubSubClients};
 use reqwest::{header::LOCATION, Method};
+use result::AppError;
 use s3::Bucket;
-use sqlx::MySqlPool;
+use sqlx::{MySqlConnection, MySqlPool};
 use tokio::sync::broadcast;
 use tower::ServiceBuilder;
 use tower_http::{
@@ -35,6 +38,10 @@ use tower_http::{
     timeout::TimeoutLayer,
 };
 use tower_sessions::{cookie::SameSite, Expiry, SessionManagerLayer};
+use twitch_irc::{
+    login::{RefreshingLoginCredentials, UserAccessToken},
+    TwitchIRCClient,
+};
 
 pub mod prelude {
     pub use crate::config::Config;
@@ -128,6 +135,26 @@ async fn main() -> Result {
         });
     }
 
+    {
+        let cfg = cfg.clone();
+        let db = db.clone();
+
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                // println!("Sending messages ...");
+
+                match send_chat_messages(cfg.clone(), db.clone()).await {
+                    Ok(()) => {}
+
+                    Err(e) => {
+                        dbg!(&e);
+                    }
+                }
+            }
+        });
+    }
+
     let addr = format!("[::]:{}", cfg.server_port.unwrap()).parse()?;
 
     let state = AppState {
@@ -137,8 +164,6 @@ async fn main() -> Result {
         pubsub,
         game_broadcasts,
     };
-
-    // TODO: Background job to clean up expired db & session records
 
     let session_service = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(|_| async {
@@ -236,4 +261,190 @@ async fn add_redirect_header<B>(req: Request<B>, next: Next<B>) -> Response {
     }
 
     return res;
+}
+
+async fn send_chat_messages(cfg: Arc<Config>, db: MySqlPool) -> Result {
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM chat_messages WHERE lock_id IS NULL AND sent = false",
+    )
+    .fetch_one(&db)
+    .await?;
+
+    if count == 0 {
+        return Ok(());
+    }
+
+    let lock_id = nanoid!(64);
+
+    sqlx::query("UPDATE chat_messages SET lock_id = ? WHERE lock_id IS NULL AND sent = false")
+        .bind(&lock_id)
+        .execute(&db)
+        .await?;
+
+    let chat_messages: Vec<ChatMessage> =
+        sqlx::query_as("SELECT * FROM chat_messages WHERE lock_id = ?")
+            .bind(&lock_id)
+            .fetch_all(&db)
+            .await?;
+
+    if chat_messages.is_empty() {
+        return Ok(());
+    }
+
+    let mut game_code_messages: HashMap<String, Vec<ChatMessage>> = chat_messages
+        .iter()
+        .map(|m| (m.game_code.clone(), vec![]))
+        .collect();
+
+    for chat_message in chat_messages {
+        if let Some(messages) = game_code_messages.get_mut(&chat_message.game_code) {
+            messages.push(chat_message);
+        }
+    }
+
+    let q = format!(
+        "SELECT game_code, user_id FROM games WHERE game_code IN ({})",
+        game_code_messages
+            .iter()
+            .map(|_| "?")
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+
+    let mut q = sqlx::query_as(&q);
+    for (game_code, _) in &game_code_messages {
+        q = q.bind(game_code);
+    }
+    let game_users: Vec<(String, String)> = q.fetch_all(&db).await?;
+
+    let mut user_messages: HashMap<String, Vec<ChatMessage>> = HashMap::new();
+    for (game_code, user_id) in game_users {
+        let messages = user_messages.entry(user_id).or_insert(vec![]);
+        if let Some(to_add) = game_code_messages.remove(&game_code) {
+            messages.extend(to_add);
+        }
+    }
+
+    for (user_id, chat_messages) in user_messages {
+        let db = db.clone();
+        let cfg = cfg.clone();
+
+        tokio::spawn(async move {
+            let user: Option<User> = sqlx::query_as("SELECT * FROM users WHERE user_id = ?")
+                .bind(&user_id)
+                .fetch_optional(&db)
+                .await
+                .unwrap();
+
+            let Some(user) = user else {
+                eprintln!("Couldn't find user with id: {user_id}");
+                return;
+            };
+
+            let client_config = twitch_irc::ClientConfig::new_simple(
+                RefreshingLoginCredentials::init_with_username(
+                    Some(user.twitch_login.clone()),
+                    cfg.twitch_client_id.to_string(),
+                    cfg.twitch_client_secret.secret().to_string(),
+                    DbTokenStorage {
+                        user_id: user.user_id.clone(),
+                        db: db.clone(),
+                    },
+                ),
+            );
+
+            let (_rx, client) =
+                TwitchIRCClient::<twitch_irc::SecureTCPTransport, _>::new(client_config);
+
+            client.join(user.twitch_login.to_string()).unwrap();
+
+            let mut sent = vec![];
+
+            for chat_message in &chat_messages {
+                match client
+                    .say(user.twitch_login.to_string(), chat_message.message.clone())
+                    .await
+                {
+                    Ok(_) => sent.push(chat_message),
+
+                    Err(e) => {
+                        dbg!(e);
+                    }
+                }
+            }
+
+            let q = format!(
+                "UPDATE chat_messages SET lock_id = NULL, sent = true WHERE id IN ({})",
+                chat_messages
+                    .iter()
+                    .map(|_| "?")
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+
+            let mut q = sqlx::query(&q);
+
+            for chat_message in &chat_messages {
+                q = q.bind(chat_message.id);
+            }
+
+            q.execute(&db).await.unwrap();
+        });
+    }
+
+    return Ok(());
+}
+
+#[derive(Debug)]
+struct DbTokenStorage {
+    user_id: String,
+    db: MySqlPool,
+}
+
+#[async_trait]
+impl twitch_irc::login::TokenStorage for DbTokenStorage {
+    type LoadError = AppError;
+    type UpdateError = AppError;
+
+    // Load the currently stored token from the storage.
+    async fn load_token(&mut self) -> Result<UserAccessToken> {
+        let session: Option<SessionAuth> =
+            sqlx::query_as("SELECT * FROM session_auths WHERE user_id = ? AND can_chat = true")
+                .bind(&self.user_id)
+                .fetch_optional(&self.db)
+                .await?;
+
+        let Some(session) = session else {
+            return Err(AppError(anyhow::anyhow!(
+                "Couldn't find valid session for user id: {}",
+                self.user_id
+            )))?;
+        };
+
+        let created_at = DateTime::from_timestamp(session.created_at as i64, 0).unwrap();
+        let expires_at = DateTime::from_timestamp(session.expiry as i64, 0);
+
+        return Ok(UserAccessToken {
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+            created_at,
+            expires_at,
+        });
+    }
+
+    // Called after the token was updated successfully, to save the new token.
+    // After `update_token()` completes, the `load_token()` method should then return
+    // that token for future invocations
+    async fn update_token(&mut self, token: &UserAccessToken) -> Result {
+        sqlx::query("UPDATE session_auths SET access_token = ?, refresh_token = ?, created_at = ?, expiry = ? WHERE user_id = ? AND can_chat = true")
+            .bind(&token.access_token)
+            .bind(&token.refresh_token)
+            .bind(token.created_at.timestamp() as u64)
+            .bind(token.expires_at.map(|e| e.timestamp() as u64))
+            .bind(&self.user_id)
+            .execute(&self.db)
+            .await?;
+
+        return Ok(());
+    }
 }

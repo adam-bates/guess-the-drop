@@ -127,6 +127,7 @@ pub enum HostActionType {
     Choose { item_id: u64 },
     Enable { item_id: u64 },
     Disable { item_id: u64 },
+    Finish,
 }
 
 impl TryInto<PubsubMessage> for PlayerAction {

@@ -51,7 +51,9 @@ async fn twitch_connect(
     );
 
     if with_chat {
-        twitch_client = twitch_client.set_scopes(vec![Scope::ChatEdit]);
+        twitch_client = twitch_client
+            .set_scopes(vec![Scope::ChatRead, Scope::ChatEdit])
+            .force_verify(true);
     }
 
     let (url, csrf_token) = twitch_client.generate_url();
@@ -208,18 +210,20 @@ async fn twitch_callback(
         .execute(&state.db)
         .await?;
 
-    sqlx::query("INSERT IGNORE INTO users (user_id, username) VALUES (?, ?)")
+    sqlx::query("INSERT IGNORE INTO users (user_id, username, twitch_login) VALUES (?, ?, ?)")
         .bind(token.user_id.as_str())
         .bind(username)
+        .bind(token.login.as_str())
         .execute(&state.db)
         .await?;
 
-    sqlx::query("INSERT INTO session_auths (sid, user_id, access_token, refresh_token, expiry, can_chat) VALUES (?, ?, ?, ?, ?, ?)")
+    sqlx::query("INSERT INTO session_auths (sid, user_id, access_token, refresh_token, created_at, expiry, can_chat) VALUES (?, ?, ?, ?, ?, ?, ?)")
         .bind(&sid)
         .bind(token.user_id.as_str())
         .bind(&token.access_token.secret())
         .bind(&token.refresh_token.as_ref().map(|t| t.secret()).unwrap_or_default())
-        .bind(expiry_s as i64)
+        .bind(now_s)
+        .bind(expiry_s)
         .bind(csrf_token.with_chat)
         .execute(&state.db)
         .await?;
@@ -227,21 +231,6 @@ async fn twitch_callback(
     let redirect = csrf_token.redirect.unwrap_or("/".to_string());
 
     return Ok(response::Redirect::to(&redirect).into_response());
-
-    // let client_config = ClientConfig::new_simple(StaticLoginCredentials::new(
-    //     token.login.to_string(),
-    //     Some(token.access_token.into()),
-    // ));
-
-    // let (_rx, client) = TwitchIRCClient::<SecureTCPTransport, _>::new(client_config);
-
-    // client.join(token.login.to_string())?;
-
-    // client
-    //     .say(token.login.to_string(), "hello world".to_string())
-    //     .await?;
-
-    // return Ok((StatusCode::OK, format!("OK")));
 }
 
 async fn logout(session: Session, State(state): State<AppState>) -> Result<impl IntoResponse> {

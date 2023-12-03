@@ -30,3 +30,6 @@ pub use player_guess::*;
 
 mod game_item_outcome;
 pub use game_item_outcome::*;
+
+mod chat_message;
+pub use chat_message::*;

@@ -521,11 +521,10 @@ async fn game_x_board(
     }
     let game_code = game_code.to_lowercase();
 
-    let game: Option<Game> =
-        sqlx::query_as("SELECT * FROM games WHERE game_code = ? AND status = 'ACTIVE' LIMIT 1")
-            .bind(&game_code)
-            .fetch_optional(&state.db)
-            .await?;
+    let game: Option<Game> = sqlx::query_as("SELECT * FROM games WHERE game_code = ? LIMIT 1")
+        .bind(&game_code)
+        .fetch_optional(&state.db)
+        .await?;
 
     let Some(game) = game else {
         return Ok(Redirect::to("/").into_response());
@@ -804,8 +803,18 @@ async fn game_x_choose_item(
     .fetch_one(&state.db)
     .await?;
 
-    let correct_guesses: Vec<PlayerGuess> = sqlx::query_as(
-        "SELECT * FROM player_guesses WHERE game_code = ? AND item_id = ? AND outcome_id IS NULL",
+    let correct_guesses: Vec<(u64, String, String)> = sqlx::query_as(
+        "
+SELECT game_players.game_player_id, users.username, game_items.name
+FROM player_guesses
+INNER JOIN game_players ON player_guesses.player_id = game_players.game_player_id
+INNER JOIN users ON game_players.user_id = users.user_id
+INNER JOIN game_items ON player_guesses.item_id = game_items.game_item_id
+WHERE
+    player_guesses.game_code = ? AND
+    player_guesses.item_id = ? AND
+    player_guesses.outcome_id IS NULL
+",
     )
     .bind(&game_code)
     .bind(&game_item_id)
@@ -813,26 +822,55 @@ async fn game_x_choose_item(
     .await?;
 
     if !correct_guesses.is_empty() {
-        let correct_guesses: HashSet<u64> =
-            correct_guesses.into_iter().map(|g| g.player_id).collect();
-
-        let values = correct_guesses
-            .iter()
-            .map(|_| "?")
-            .collect::<Vec<_>>()
-            .join(", ");
+        let correct_guess_ids: HashSet<u64> = correct_guesses.iter().map(|x| x.0).collect();
 
         let q = format!(
-            "UPDATE game_players SET points = points + 1 WHERE game_player_id IN ({values})"
+            "UPDATE game_players SET points = points + 1 WHERE game_player_id IN ({})",
+            correct_guess_ids
+                .iter()
+                .map(|_| "?")
+                .collect::<Vec<_>>()
+                .join(", ")
         );
 
         let mut query = sqlx::query(&q);
 
-        for id in correct_guesses {
+        for id in correct_guess_ids {
             query = query.bind(id);
         }
 
         query.execute(&state.db).await?;
+
+        if let Some(template_message) = &game.reward_message {
+            let mut messages = vec![];
+
+            for (_, username, item_name) in correct_guesses {
+                let msg = template_message
+                    .clone()
+                    .replace("<USER>", &username)
+                    .replace("<ITEM>", &item_name);
+
+                messages.push(msg);
+            }
+
+            let values = messages
+                .iter()
+                .map(|_| "(?, ?, NULL, false)")
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            let q = format!(
+                "INSERT INTO chat_messages (game_code, message, lock_id, sent) VALUES {values}"
+            );
+
+            let mut q = sqlx::query(&q);
+
+            for msg in messages {
+                q = q.bind(&game.game_code).bind(msg);
+            }
+
+            q.execute(&state.db).await?;
+        }
     }
 
     sqlx::query(
@@ -1252,10 +1290,11 @@ async fn finish_game(
         .await?;
     game.status = GAME_STATUS_FINISHED.to_string();
 
-    let winners: Vec<GamePlayer> = sqlx::query_as(
+    let winners: Vec<(u64, i32, String)> = sqlx::query_as(
         r#"
-SELECT *
+SELECT game_players.game_player_id, game_players.points, users.username
 FROM game_players
+    INNER JOIN users ON users.user_id = game_players.user_id
 WHERE
     game_players.game_code = ? AND
     points != 0 AND
@@ -1281,12 +1320,59 @@ WHERE
         let q = format!("INSERT INTO game_winners (game_player_id, game_code) VALUES {values}");
         let mut query = sqlx::query(&q);
 
-        for winner in winners {
-            query = query.bind(winner.game_player_id).bind(&game_code);
+        for (game_player_id, _, _) in &winners {
+            query = query.bind(game_player_id).bind(&game_code);
         }
 
         query.execute(&state.db).await?;
+
+        if let Some(template_message) = &game.total_reward_message {
+            let total: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = ?")
+                    .bind(&game_code)
+                    .fetch_one(&state.db)
+                    .await?;
+
+            let mut messages = vec![];
+
+            for (_, points, username) in winners {
+                let msg = template_message
+                    .clone()
+                    .replace("<USER>", &username)
+                    .replace("<POINTS>", &points.to_string())
+                    .replace("<TOTAL>", &total.to_string());
+
+                messages.push(msg);
+            }
+
+            let values = messages
+                .iter()
+                .map(|_| "(?, ?, NULL, false)")
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            let q = format!(
+                "INSERT INTO chat_messages (game_code, message, lock_id, sent) VALUES {values}"
+            );
+
+            let mut q = sqlx::query(&q);
+
+            for msg in messages {
+                q = q.bind(&game.game_code).bind(msg);
+            }
+
+            q.execute(&state.db).await?;
+        }
     }
+
+    state
+        .pubsub
+        .host_actions
+        .publish(HostAction {
+            game_code: game_code.clone(),
+            typ: HostActionType::Finish,
+        })
+        .await?;
 
     return Ok(Redirect::to(&format!("/games/{game_code}")).into_response());
 }

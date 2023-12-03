@@ -36,7 +36,7 @@ tower-http = { version = "0.4.4", features = ["compression-full", "cors", "fs", 
 tower-sessions = { version = "0.4.1", features = ["mysql-store", "moka-store"] }
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
-twitch-irc = "5.0.1"
+twitch-irc = { version = "5.0.1", features = ["reqwest", "__refreshing-token"] }
 twitch_oauth2 = { version = "0.12.7", features = ["client", "reqwest"] }
 chrono = "0.4.31"
 twitch_api = { version = "0.7.0-rc.7", features = ["reqwest", "helix"] }
@@ -47,4 +47,5 @@ lazy_static = "1.4.0"
 futures-util = "0.3.29"
 prost-types = "0.11.9"
 futures = "0.3.29"
+rand = "0.8.5"
 

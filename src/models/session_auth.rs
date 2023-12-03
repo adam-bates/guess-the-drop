@@ -12,6 +12,7 @@ pub struct SessionAuth {
     pub user_id: String,
     pub access_token: String,
     pub refresh_token: String,
+    pub created_at: u64,
     pub expiry: u64,
     pub can_chat: bool,
 }
@@ -23,10 +24,12 @@ pub struct SessionAuthWithUser {
     pub user_id: String,
     pub access_token: String,
     pub refresh_token: String,
+    pub created_at: u64,
     pub expiry: u64,
     pub can_chat: bool,
 
     pub username: String,
+    pub twitch_login: String,
 }
 
 impl SessionAuthWithUser {
@@ -35,6 +38,7 @@ impl SessionAuthWithUser {
             User {
                 user_id: self.user_id.clone(),
                 username: self.username,
+                twitch_login: self.twitch_login,
             },
             SessionAuth {
                 id: self.id,
@@ -42,6 +46,7 @@ impl SessionAuthWithUser {
                 user_id: self.user_id,
                 access_token: self.access_token,
                 refresh_token: self.refresh_token,
+                created_at: self.created_at,
                 expiry: self.expiry,
                 can_chat: self.can_chat,
             },
