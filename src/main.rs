@@ -155,7 +155,7 @@ async fn main() -> Result {
         });
     }
 
-    let addr = format!("[::]:{}", cfg.server_port.unwrap()).parse()?;
+    let addr = format!("0.0.0.0:{}", cfg.server_port.unwrap()).parse()?;
 
     let state = AppState {
         cfg,
