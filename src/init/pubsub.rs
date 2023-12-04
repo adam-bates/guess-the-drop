@@ -17,7 +17,13 @@ const TOPIC_PLAYER_ACTIONS: &str = "player_actions";
 const TOPIC_HOST_ACTIONS: &str = "host_actions";
 
 pub async fn init_pubsub(cfg: &Config) -> Result<Arc<PubSubClients>> {
-    let pubsub_creds = CredentialsFile::new_from_file(cfg.google_key_json_filepath.clone()).await?;
+    let pubsub_creds = if let Some(json) = &cfg.google_key_json {
+        CredentialsFile::new_from_str(json).await?
+    } else if let Some(filepath) = &cfg.google_key_json_filepath {
+        CredentialsFile::new_from_file(filepath.clone()).await?
+    } else {
+        CredentialsFile::new().await?
+    };
 
     let pubsub_config = ClientConfig::default()
         .with_credentials(pubsub_creds)
