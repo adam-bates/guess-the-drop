@@ -38,6 +38,7 @@ pub fn add_routes(router: Router<AppState>) -> Router<AppState> {
         .route("/games", get(games).post(post_game))
         .route("/games/:game_code", get(game))
         .route("/games/:game_code/finish", post(finish_game))
+        .route("/games/:game_code/x/redirect", get(game_x_redirect))
         .route("/games/:game_code/x/board", get(game_x_board))
         .route("/games/:game_code/x/lock", put(game_x_lock))
         .route("/games/:game_code/x/unlock", put(game_x_unlock))
@@ -318,8 +319,6 @@ struct GameAsPlayerTemplate {
     player: GamePlayer,
     drops_count: i64,
     img_base_uri: String,
-    is_finished: bool,
-    is_winner: bool,
 }
 
 #[derive(Template, Clone)]
@@ -497,14 +496,14 @@ WHERE
         });
     }
 
-    let lead_points: Option<Option<i32>> =
-        sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = ?")
-            .bind(&game_code)
-            .fetch_optional(&state.db)
-            .await?;
-    let lead_points = lead_points.flatten().unwrap_or(0);
-
     if game.user_id == user.user_id {
+        let lead_points: Option<Option<i32>> =
+            sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = ?")
+                .bind(&game_code)
+                .fetch_optional(&state.db)
+                .await?;
+        let lead_points = lead_points.flatten().unwrap_or(0);
+
         let players_count: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM game_players WHERE game_code = ?")
                 .bind(&game_code)
@@ -642,12 +641,14 @@ WHERE
         guess,
         items,
         user,
-        is_winner: player.points == lead_points,
         player,
         drops_count,
-        is_finished: false,
     })
     .into_response());
+}
+
+async fn game_x_redirect(Path(game_code): Path<String>) -> impl IntoResponse {
+    return Redirect::to(&format!("/games/{game_code}"));
 }
 
 async fn game_x_board(
@@ -672,42 +673,43 @@ async fn game_x_board(
         return Ok(Redirect::to("/").into_response());
     };
 
-    let (drops_count, lead_points) = {
-        let jh1 = {
-            let game_code = game_code.clone();
-            let db = state.db.clone();
-
-            tokio::spawn(async move {
-                return Ok(sqlx::query_scalar(
-                    "SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = ?",
-                )
-                .bind(&game_code)
-                .fetch_optional(&db)
-                .await?
-                .unwrap_or(0i64)) as Result<i64>;
-            })
-        };
-
-        let jh2 = {
-            let game_code = game_code.clone();
-            let db = state.db.clone();
-
-            tokio::spawn(async move {
-                let lead_points: Option<Option<i32>> =
-                    sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = ?")
-                        .bind(&game_code)
-                        .fetch_optional(&db)
-                        .await?;
-                return Ok(lead_points.flatten().unwrap_or(0)) as Result<i32>;
-            })
-        };
-
-        let (r1, r2) = tokio::join! { jh1, jh2 };
-
-        (r1??, r2??)
-    };
-
     if game.user_id == user.user_id {
+        let (drops_count, lead_points) = {
+            let jh1 = {
+                let game_code = game_code.clone();
+                let db = state.db.clone();
+
+                tokio::spawn(async move {
+                    return Ok(sqlx::query_scalar(
+                        "SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = ?",
+                    )
+                    .bind(&game_code)
+                    .fetch_optional(&db)
+                    .await?
+                    .unwrap_or(0i64)) as Result<i64>;
+                })
+            };
+
+            let jh2 = {
+                let game_code = game_code.clone();
+                let db = state.db.clone();
+
+                tokio::spawn(async move {
+                    let lead_points: Option<Option<i32>> = sqlx::query_scalar(
+                        "SELECT MAX(points) FROM game_players WHERE game_code = ?",
+                    )
+                    .bind(&game_code)
+                    .fetch_optional(&db)
+                    .await?;
+                    return Ok(lead_points.flatten().unwrap_or(0)) as Result<i32>;
+                })
+            };
+
+            let (r1, r2) = tokio::join! { jh1, jh2 };
+
+            (r1??, r2??)
+        };
+
         let (items, players_count, leaders) = {
             let jh1 = {
                 let game_code = game_code.clone();
@@ -798,9 +800,7 @@ WHERE
         return Ok(Redirect::to("/").into_response());
     };
 
-    let is_finished = game.status.as_str() != GAME_STATUS_ACTIVE;
-
-    let (guess, items, host) = {
+    let (guess, items, host, drops_count) = {
         let jh1 = {
             let game_code = game_code.clone();
             let game_player_id = game_player.game_player_id.clone();
@@ -842,9 +842,24 @@ WHERE
             })
         };
 
-        let (r1, r2, r3) = tokio::join! { jh1, jh2, jh3 };
+        let jh4 = {
+            let game_code = game_code.clone();
+            let db = state.db.clone();
 
-        (r1??, r2??, r3??)
+            tokio::spawn(async move {
+                return Ok(sqlx::query_scalar(
+                    "SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = ?",
+                )
+                .bind(&game_code)
+                .fetch_optional(&db)
+                .await?
+                .unwrap_or(0i64)) as Result<i64>;
+            })
+        };
+
+        let (r1, r2, r3, r4) = tokio::join! { jh1, jh2, jh3, jh4 };
+
+        (r1??, r2??, r3??, r4??)
     };
 
     return Ok(Html(GameAsPlayerBoardTemplate {
@@ -853,11 +868,9 @@ WHERE
         guess,
         user,
         items,
-        is_winner: game_player.points == lead_points,
         player: game_player,
         drops_count,
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
-        is_finished,
     })
     .into_response());
 }
@@ -1315,8 +1328,6 @@ struct GameAsPlayerBoardTemplate {
     player: GamePlayer,
     drops_count: i64,
     img_base_uri: String,
-    is_finished: bool,
-    is_winner: bool,
 }
 
 async fn game_x_guess_item(
@@ -1479,24 +1490,15 @@ async fn game_x_guess_item(
             .await?
             .unwrap_or(0);
 
-    let lead_points: Option<Option<i32>> =
-        sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = ?")
-            .bind(&game_code)
-            .fetch_optional(&state.db)
-            .await?;
-    let lead_points = lead_points.flatten().unwrap_or(0);
-
     return Ok(Html(GameAsPlayerBoardTemplate {
         game,
         host,
         guess: Some(guess),
         user,
         items,
-        is_winner: game_player.points == lead_points,
         player: game_player,
         drops_count,
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
-        is_finished: false,
     })
     .into_response());
 }
@@ -1880,7 +1882,9 @@ async fn host_sse(
     let rx = broadcast.to_host.subscribe();
 
     let stream = BroadcastStream::new(rx).map(move |event| -> Result<Event> {
-        match &event?.typ {
+        let event = event?;
+
+        match &event.typ {
             PlayerActionType::Join {
                 new_players_count: player_count,
             } => {
@@ -1920,11 +1924,7 @@ async fn host_sse(
     });
 
     return Ok(Sse::new(stream)
-        .keep_alive(
-            axum::response::sse::KeepAlive::new()
-                .interval(Duration::from_secs(1))
-                .text("keep-alive-text"),
-        )
+        .keep_alive(axum::response::sse::KeepAlive::new().interval(Duration::from_secs(3)))
         .into_response());
 }
 
@@ -1997,17 +1997,22 @@ async fn player_sse(
     let rx = broadcast.to_players.subscribe();
 
     let stream = BroadcastStream::new(rx).map(|event| -> Result<Event> {
-        match &event?.typ {
-            HostActionType::Disable { item_id } => {
-                return Ok(Event::default()
-                    .event(format!("update_item_{item_id}"))
-                    .data(""))
+        let event = event?;
+
+        match &event.typ {
+            HostActionType::Finish => {
+                return Ok(Event::default().event(format!("force_refresh")).data(""))
             }
 
+            // HostActionType::Disable { item_id } => {
+            //     return Ok(Event::default()
+            //         .event(format!("update_item_{item_id}"))
+            //         .data(""))
+            // }
             HostActionType::Lock
             | HostActionType::Unlock
-            | HostActionType::Finish
             | HostActionType::Enable { .. }
+            | HostActionType::Disable { .. }
             | HostActionType::Choose { .. } => {
                 return Ok(Event::default().event("host_action").data(""))
             }
@@ -2015,10 +2020,6 @@ async fn player_sse(
     });
 
     return Ok(Sse::new(stream)
-        .keep_alive(
-            axum::response::sse::KeepAlive::new()
-                .interval(Duration::from_secs(1))
-                .text("keep-alive-text"),
-        )
+        .keep_alive(axum::response::sse::KeepAlive::new().interval(Duration::from_secs(3)))
         .into_response());
 }
