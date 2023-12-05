@@ -167,7 +167,7 @@ async fn post_game(
         .duration_since(SystemTime::UNIX_EPOCH)?
         .as_secs();
 
-    sqlx::query("INSERT INTO games (user_id, game_code, status, created_at, active_at, name, auto_lock, reward_message, total_reward_message, is_locked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, false)")
+    sqlx::query("INSERT INTO games (user_id, game_code, status, created_at, active_at, name, auto_lock, reward_message, total_reward_message, is_locked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, false)")
         .bind(&user.user_id)
         .bind(&game_code)
         .bind(GAME_STATUS_ACTIVE)
