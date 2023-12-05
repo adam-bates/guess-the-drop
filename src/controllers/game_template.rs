@@ -439,6 +439,8 @@ async fn post_template(
 
     let mut name = None;
 
+    let mut auto_lock = None;
+
     let mut should_post = None;
     let mut post_msg = None;
 
@@ -459,6 +461,11 @@ async fn post_template(
 
                 name = Some(txt.to_string());
             }
+
+            Some("auto-lock") => match field.bytes().await?.as_ref() {
+                b"on" => auto_lock = Some(true),
+                _ => auto_lock = Some(false),
+            },
 
             Some("should-post") => match field.bytes().await?.as_ref() {
                 b"on" => should_post = Some(true),
@@ -547,6 +554,8 @@ async fn post_template(
         return Err(anyhow::anyhow!("Template name is required"))?;
     };
 
+    let auto_lock = auto_lock.unwrap_or(false);
+
     let reward_message = should_post.map(|_| post_msg.unwrap_or(DEFAULT_REWARD_MSG.to_string()));
     let total_reward_message =
         should_post_total.map(|_| post_total_msg.unwrap_or(DEFAULT_TOTAL_REWARD_MSG.to_string()));
@@ -610,9 +619,10 @@ async fn post_template(
         list
     };
 
-    sqlx::query("INSERT INTO game_templates (user_id, name, reward_message, total_reward_message) VALUES (?, ?, ?, ?)")
+    sqlx::query("INSERT INTO game_templates (user_id, name, auto_lock, reward_message, total_reward_message) VALUES (?, ?, ?, ?, ?)")
         .bind(&user.user_id)
         .bind(&name)
+        .bind(&auto_lock)
         .bind(&reward_message)
         .bind(&total_reward_message)
         .execute(&state.db)
@@ -681,6 +691,8 @@ async fn put_template(
 
     let mut name = None;
 
+    let mut auto_lock = None;
+
     let mut should_post = None;
     let mut post_msg = None;
 
@@ -701,6 +713,11 @@ async fn put_template(
 
                 name = Some(txt.to_string());
             }
+
+            Some("auto-lock") => match field.bytes().await?.as_ref() {
+                b"on" => auto_lock = Some(true),
+                _ => auto_lock = Some(false),
+            },
 
             Some("should-post") => match field.bytes().await?.as_ref() {
                 b"on" => should_post = Some(true),
@@ -792,6 +809,8 @@ async fn put_template(
         return Err(anyhow::anyhow!("Template name is required"))?;
     };
 
+    let auto_lock = auto_lock.unwrap_or(false);
+
     let reward_message = should_post.map(|_| post_msg.unwrap_or(DEFAULT_REWARD_MSG.to_string()));
     let total_reward_message =
         should_post_total.map(|_| post_total_msg.unwrap_or(DEFAULT_TOTAL_REWARD_MSG.to_string()));
@@ -879,8 +898,9 @@ async fn put_template(
         (to_create, to_update)
     };
 
-    sqlx::query("UPDATE game_templates SET name = ?, reward_message = ?, total_reward_message = ? WHERE game_template_id = ? AND user_id = ?")
+    sqlx::query("UPDATE game_templates SET name = ?, auto_lock = ?, reward_message = ?, total_reward_message = ? WHERE game_template_id = ? AND user_id = ?")
         .bind(&name)
+        .bind(&auto_lock)
         .bind(&reward_message)
         .bind(&total_reward_message)
         .bind(&id)

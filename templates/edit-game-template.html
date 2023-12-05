@@ -66,6 +66,14 @@
                 <input type="text" id="name" name="name" required placeholder="Type here" value="{{ template.name }}" class="input input-bordered w-full max-w-lg" />
             </div>
 
+            <div class="form-control w-full max-w-lg flex flex-row gap-2">
+                <input type="checkbox" id="auto-lock" name="auto-lock" class="checkbox" {% if template.auto_lock %} checked {% endif %} />
+
+                <label for="auto-lock" class="label py-0 cursor-pointer">
+                    <span class="label-text">Auto-lock guesses?</span>
+                </label>
+            </div>
+
             {% if let Some(post_msg) = template.reward_message %}
                 <div id="post-msg-section" class="flex flex-col gap-4">
                     <div hx-trigger="click" hx-get="/game-templates/{{ template.game_template_id }}/x/no-post-msg" hx-target="#post-msg-section" class="form-control w-full max-w-lg flex flex-row gap-2 cursor-pointer">

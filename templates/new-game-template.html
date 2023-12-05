@@ -37,6 +37,14 @@
                 <input type="text" id="name" name="name" required placeholder="Type here" class="input input-bordered w-full max-w-lg" />
             </div>
 
+            <div class="form-control w-full max-w-lg flex flex-row gap-2">
+                <input type="checkbox" id="auto-lock" name="auto-lock" class="checkbox" />
+
+                <label for="auto-lock" class="label py-0 cursor-pointer">
+                    <span class="label-text">Auto-lock guesses?</span>
+                </label>
+            </div>
+
             <div id="post-msg-section" class="flex flex-col gap-4">
                 <div hx-trigger="click" hx-get="/game-templates/new/x/post-msg" hx-target="#post-msg-section" class="form-control w-full max-w-lg flex flex-row gap-2 cursor-pointer">
                     <input type="checkbox" name="should-post" class="checkbox" />

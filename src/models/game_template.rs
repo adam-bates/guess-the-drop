@@ -1,9 +1,5 @@
-use super::GameItemTemplate;
-
-use crate::Result;
-
 use serde::{Deserialize, Serialize};
-use sqlx::{self, MySqlPool};
+use sqlx;
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Debug, Clone)]
 pub struct GameTemplate {
@@ -11,6 +7,8 @@ pub struct GameTemplate {
     pub user_id: String,
 
     pub name: String,
+    pub auto_lock: bool,
+
     pub reward_message: Option<String>,
     pub total_reward_message: Option<String>,
 }

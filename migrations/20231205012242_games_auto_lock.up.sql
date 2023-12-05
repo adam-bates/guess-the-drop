@@ -1,0 +1,3 @@
+ALTER TABLE games
+ADD COLUMN auto_lock BOOLEAN NOT NULL;
+

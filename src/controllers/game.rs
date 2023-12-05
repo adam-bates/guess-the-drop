@@ -167,13 +167,14 @@ async fn post_game(
         .duration_since(SystemTime::UNIX_EPOCH)?
         .as_secs();
 
-    sqlx::query("INSERT INTO games (user_id, game_code, status, created_at, active_at, name, reward_message, total_reward_message, is_locked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, false)")
+    sqlx::query("INSERT INTO games (user_id, game_code, status, created_at, active_at, name, auto_lock, reward_message, total_reward_message, is_locked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, false)")
         .bind(&user.user_id)
         .bind(&game_code)
         .bind(GAME_STATUS_ACTIVE)
         .bind(&now)
         .bind(&now)
         .bind(&game_template.name)
+        .bind(&game_template.auto_lock)
         .bind(&game_template.reward_message)
         .bind(&game_template.total_reward_message)
         .execute(&state.db)
@@ -1235,12 +1236,13 @@ WHERE
         .execute(&state.db)
         .await?;
 
-    if game.is_locked {
-        sqlx::query("UPDATE games SET is_locked = false WHERE game_code = ?")
+    if game.is_locked != game.auto_lock {
+        sqlx::query("UPDATE games SET is_locked = ? WHERE game_code = ?")
+            .bind(&game.auto_lock)
             .bind(&game_code)
             .execute(&state.db)
             .await?;
-        game.is_locked = false;
+        game.is_locked = game.auto_lock;
     }
 
     state

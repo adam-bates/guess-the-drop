@@ -15,6 +15,7 @@ pub struct Game {
     pub active_at: u64,
 
     pub name: String,
+    pub auto_lock: bool,
     pub reward_message: Option<String>,
     pub total_reward_message: Option<String>,
 
@@ -31,6 +32,7 @@ pub struct GameWithJoinedSummary {
     pub active_at: u64,
 
     pub name: String,
+    pub auto_lock: bool,
     pub reward_message: Option<String>,
     pub total_reward_message: Option<String>,
 
@@ -57,6 +59,7 @@ pub struct GameWithHostedSummary {
     pub active_at: u64,
 
     pub name: String,
+    pub auto_lock: bool,
     pub reward_message: Option<String>,
     pub total_reward_message: Option<String>,
 
