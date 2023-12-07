@@ -141,7 +141,6 @@ async fn main() -> Result {
 
         tokio::spawn(async move {
             loop {
-                tokio::time::sleep(Duration::from_secs(5)).await;
                 // println!("Sending messages ...");
 
                 match send_chat_messages(cfg.clone(), db.clone()).await {
@@ -243,6 +242,10 @@ async fn add_redirect_header<B>(req: Request<B>, next: Next<B>) -> Response {
     } else {
         false
     };
+
+    if is_hx {
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    }
 
     let mut res = next.run(req).await;
 
