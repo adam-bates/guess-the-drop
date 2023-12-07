@@ -1926,9 +1926,7 @@ async fn host_sse(
         }
     });
 
-    return Ok(Sse::new(stream)
-        .keep_alive(axum::response::sse::KeepAlive::new().interval(Duration::from_secs(3)))
-        .into_response());
+    return Ok(Sse::new(stream).into_response());
 }
 
 async fn player_sse(
@@ -2022,7 +2020,5 @@ async fn player_sse(
         }
     });
 
-    return Ok(Sse::new(stream)
-        .keep_alive(axum::response::sse::KeepAlive::new().interval(Duration::from_secs(3)))
-        .into_response());
+    return Ok(Sse::new(stream).into_response());
 }
