@@ -243,10 +243,6 @@ async fn add_redirect_header<B>(req: Request<B>, next: Next<B>) -> Response {
         false
     };
 
-    if is_hx {
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-    }
-
     let mut res = next.run(req).await;
 
     if is_hx && res.status().is_redirection() {
