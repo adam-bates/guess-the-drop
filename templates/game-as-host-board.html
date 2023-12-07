@@ -5,7 +5,7 @@
             <h3 class="p-1"><span id="created_at"></span></h3>
         </div>
 
-        <button id="copy_share_link" class="btn btn-ghost my-2" onclick="copyShareLink()">
+        <button id="copy_share_link" class="btn btn-ghost sm:btn-lg lg:btn-md my-2" onclick="copyShareLink()">
             Copy share link
         </button>
     </div>
@@ -65,26 +65,26 @@
     <div class="flex flex-row justify-between gap-4 py-4">
         {% if game.is_locked %}
             <div class="flex flex-row gap-2 items-center text-error">
-                <button hx-put="/games/{{ game.game_code }}/x/unlock" hx-target="#game_board" class="btn btn-neutral btn-sm">Unlock</button>
+                <button hx-put="/games/{{ game.game_code }}/x/unlock" hx-target="#game_board" class="btn btn-neutral sm:btn-lg lg:btn-md">Unlock</button>
                 <div></div>
                 <svg fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><rect height="11" rx="2" ry="2" width="18" x="3" y="11"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                 <h3 class="text-lg">Guesses are locked</h3>
             </div>
         {% else %}
             <div class="flex flex-row gap-2 items-center text-accent">
-                <button hx-put="/games/{{ game.game_code }}/x/lock" hx-target="#game_board" class="btn btn-neutral btn-sm">Lock</button>
+                <button hx-put="/games/{{ game.game_code }}/x/lock" hx-target="#game_board" class="btn btn-neutral sm:btn-lg lg:btn-md">Lock</button>
                 <div></div>
                 <svg viewBox="0 0 24 24" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" width="24" xmlns="http://www.w3.org/2000/svg"><rect height="10" rx="2" ry="2" width="16" x="4" y="12"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>
                 <h3 class="text-lg">Guesses are open</h3>
             </div>
         {% endif %}
 
-        <button sse-swap="enable_clear_guesses" hx-swap="outerHTML" hx-put="/games/{{ game.game_code }}/x/clear-guesses" {% if !any_guesses %} disabled {% endif %} class="btn btn-ghost btn-sm">Clear guesses</button>
+        <button sse-swap="enable_clear_guesses" hx-swap="outerHTML" hx-put="/games/{{ game.game_code }}/x/clear-guesses" {% if !any_guesses %} disabled {% endif %} class="btn btn-ghost sm:btn-lg lg:btn-md">Clear guesses</button>
     </div>
 
     <h2 class="text-xl">Which item did you get?</h2>
 
-    <div class="grid gap-4 xs:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 py-4">
+    <div class="grid gap-4 md:grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 py-4">
         {% for item in items %}
             {% include "game-as-host-item.html" %}
         {% endfor %}

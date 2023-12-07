@@ -5,7 +5,7 @@
 
         <div class="divider"></div>
 
-        <div class="stats stats-vertical lg:stats-horizontal shadow">
+        <div class="stats stats-horizontal shadow">
             <div class="stat">
                 <div class="stat-title">Total Drops</div>
                 <div class="stat-value">{{ drops_count }}</div>
@@ -33,7 +33,7 @@
 
         <h2 class="text-xl">Guess which item will come next?</h2>
 
-        <div class="grid gap-4 xs:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 py-4">
+        <div class="grid gap-4 md:grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 py-4">
             {% for item in items %}
                 {% if item.enabled %}
                     {% include "game-as-player-item.html" %}

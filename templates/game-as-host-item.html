@@ -1,15 +1,15 @@
-<div id="card-{{ item.game_item_id }}" class="card bg-base-100 shadow-xl">
+<div id="card-{{ item.game_item_id }}" class="card bg-base-100 shadow-xl md:min-h-[250px] md:max-h-[250px]">
     <div class="card-body flex flex-col gap-4">
-        <h2 class="card-title">
+        <h2 class="card-title md:text-2xl">
             {{ item.name }}
 
             <span sse-swap="guesses_{{ item.game_item_id }}">
                 {% if let Some(guess_count) = item.guess_count %}
                     {% if let 0 = guess_count %}
                     {% else if let 1 = guess_count %}
-                        <span class="badge">1 guess</span>
+                        <span class="badge sm:text-lg md:text-sm">1 guess</span>
                     {% else %}
-                        <span class="badge">{{ guess_count }} guesses</span>
+                        <span class="badge sm:text-lg md:text-sm">{{ guess_count }} guesses</span>
                     {% endif %}
                 {% endif %}
             </span>
@@ -28,7 +28,7 @@
                 {% endif %}
             </div>
             <div>
-                <button type="button" {% if !game.is_locked || !item.enabled %} disabled {% endif %} onclick="confirm_{{ item.game_item_id }}.showModal()" class="btn btn-primary btn-sm text-black">
+                <button type="button" {% if !game.is_locked || !item.enabled %} disabled {% endif %} onclick="confirm_{{ item.game_item_id }}.showModal()" class="btn btn-primary sm:btn-lg lg:btn-md text-black">
                     Choose
                     <svg fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
                 </button>

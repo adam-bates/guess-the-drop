@@ -1,28 +1,30 @@
-<div id="card-{{ item.game_item_id }}" class="card bg-base-100 shadow-xl">
-    <div class="card-body flex flex-col gap-4">
-        <h2 class="card-title">{{ item.name }}</h2>
-        {% if let Some(guess) = guess %}
-            {% if guess.item_id == item.game_item_id %}
-                <p>You guessed this item.</p>
+<div id="card-{{ item.game_item_id }}" class="card bg-base-100 shadow-xl md:min-h-[250px] md:max-h-[250px]">
+    <div class="card-body flex flex-col gap-4 justify-between">
+        <div class="flex flex-col gap-4">
+            <h2 class="card-title md:text-2xl">{{ item.name }}</h2>
+            {% if let Some(guess) = guess %}
+                {% if guess.item_id == item.game_item_id %}
+                    <p>You guessed this item.</p>
+                {% endif %}
             {% endif %}
-        {% endif %}
+        </div>
 
         <div class="card-actions flex flex-row justify-end">
              <div>
                 {% if let Some(guess) = guess %}
                     {% if guess.item_id == item.game_item_id %}
-                        <button type="button" disabled class="btn btn-primary btn-sm text-black">
+                        <button type="button" disabled class="btn btn-primary sm:btn-lg lg:btn-md text-black">
                             Guess
                             <svg fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
                         </button>
                     {% else %}
-                        <button type="button" {% if game.is_locked %} disabled {% endif %} hx-put="/games/{{ game.game_code }}/items/{{ item.game_item_id }}/x/guess" hx-target="#game_board" class="btn btn-primary btn-sm text-black">
+                        <button type="button" {% if game.is_locked %} disabled {% endif %} hx-put="/games/{{ game.game_code }}/items/{{ item.game_item_id }}/x/guess" hx-target="#game_board" class="btn btn-primary sm:btn-lg lg:btn-md text-black">
                             Change Guess
                             <svg fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
                         </button>
                     {% endif %}
                 {% else %}
-                    <button type="button" {% if game.is_locked %} disabled {% endif %} hx-put="/games/{{ game.game_code }}/items/{{ item.game_item_id }}/x/guess" hx-target="#game_board" class="btn btn-primary btn-sm text-black">
+                    <button type="button" {% if game.is_locked %} disabled {% endif %} hx-put="/games/{{ game.game_code }}/items/{{ item.game_item_id }}/x/guess" hx-target="#game_board" class="btn btn-primary sm:btn-lg lg:btn-md text-black">
                         Guess
                         <svg fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
                     </button>

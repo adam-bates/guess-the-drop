@@ -58,11 +58,11 @@
 
     <div class="divider"></div>
 
-    <div class="grid gap-4 xs:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div class="grid gap-4 md:grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 py-4">
         {% for item in items %}
-            <div id="card-{{ item.game_item_id }}" class="card bg-base-100 shadow-xl">
+            <div id="card-{{ item.game_item_id }}" class="card bg-base-100 shadow-xl md:min-h-[250px] md:max-h-[250px]">
                 <div class="card-body flex flex-col gap-4">
-                    <h2 class="card-title">{{ item.name }}</h2>
+                    <h2 class="card-title md:text-2xl">{{ item.name }}</h2>
                 </div>
 
                 {% if let Some(image) = item.image %}

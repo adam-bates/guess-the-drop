@@ -1969,7 +1969,7 @@ async fn host_sse(
             PlayerActionType::EnableClearGuesses => {
                 return Ok(Event::default()
                     .event("enable_clear_guesses")
-                    .data(format!(r#"<button hx-put="/games/{}/x/clear-guesses" class="btn btn-ghost btn-sm">Clear guesses</button>"#, event.game_code)))
+                    .data(format!(r#"<button hx-put="/games/{}/x/clear-guesses" class="btn btn-ghost sm:btn-lg lg:btn-md">Clear guesses</button>"#, event.game_code)))
             }
 
             PlayerActionType::Join {
