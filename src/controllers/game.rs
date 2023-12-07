@@ -43,6 +43,10 @@ pub fn add_routes(router: Router<AppState>) -> Router<AppState> {
         .route("/games/:game_code/x/lock", put(game_x_lock))
         .route("/games/:game_code/x/unlock", put(game_x_unlock))
         .route(
+            "/games/:game_code/x/clear-guesses",
+            put(game_x_clear_guesses),
+        )
+        .route(
             "/games/:game_code/items/:game_item_id/x/enable",
             put(game_x_enable_item),
         )
@@ -328,6 +332,7 @@ struct GameAsPlayerTemplate {
 struct GameAsHostTemplate {
     game: Game,
     items: Vec<GameItemWithGuessCount>,
+    any_guesses: bool,
     user: User,
     players_count: i64,
     drops_count: i64,
@@ -525,6 +530,9 @@ WHERE
             base_uri: state.cfg.server_host_uri.clone(),
             img_base_uri: state.cfg.r2_bucket_public_url.clone(),
             game,
+            any_guesses: items
+                .iter()
+                .any(|item| item.guess_count.map(|c| c > 0).unwrap_or(false)),
             items,
             user,
             players_count,
@@ -781,6 +789,9 @@ WHERE
         return Ok(Html(GameAsHostBoardTemplate {
             img_base_uri: state.cfg.r2_bucket_public_url.clone(),
             game,
+            any_guesses: items
+                .iter()
+                .any(|item| item.guess_count.map(|c| c > 0).unwrap_or(false)),
             items,
             user,
             players_count,
@@ -882,6 +893,7 @@ WHERE
 struct GameAsHostBoardTemplate {
     game: Game,
     items: Vec<GameItemWithGuessCount>,
+    any_guesses: bool,
     user: User,
     players_count: i64,
     drops_count: i64,
@@ -985,6 +997,9 @@ WHERE
     return Ok(Html(GameAsHostBoardTemplate {
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
         game,
+        any_guesses: items
+            .iter()
+            .any(|item| item.guess_count.map(|c| c > 0).unwrap_or(false)),
         items,
         user,
         players_count,
@@ -1090,6 +1105,9 @@ WHERE
     return Ok(Html(GameAsHostBoardTemplate {
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
         game,
+        any_guesses: items
+            .iter()
+            .any(|item| item.guess_count.map(|c| c > 0).unwrap_or(false)),
         items,
         user,
         players_count,
@@ -1310,6 +1328,9 @@ WHERE
     return Ok(Html(GameAsHostBoardTemplate {
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
         game,
+        any_guesses: items
+            .iter()
+            .any(|item| item.guess_count.map(|c| c > 0).unwrap_or(false)),
         items,
         user,
         players_count,
@@ -1451,7 +1472,7 @@ async fn game_x_guess_item(
             .bind(&game_item.game_item_id)
             .fetch_optional(&state.db)
             .await?
-            .unwrap_or(0);
+            .unwrap_or(1);
 
         state
             .pubsub
@@ -1465,6 +1486,18 @@ async fn game_x_guess_item(
                 },
             })
             .await?;
+
+        if new_guess_count == 1 {
+            state
+                .pubsub
+                .player_actions
+                .publish(PlayerAction {
+                    game_code: game_code.clone(),
+                    user_id: user.user_id.clone(),
+                    typ: PlayerActionType::EnableClearGuesses,
+                })
+                .await?;
+        }
 
         let guess: PlayerGuess = sqlx::query_as("SELECT * FROM player_guesses WHERE game_code = ? AND player_id = ? AND item_id = ? AND outcome_id IS NULL LIMIT 1")
             .bind(&game_code)
@@ -1506,11 +1539,54 @@ async fn game_x_guess_item(
     .into_response());
 }
 
+async fn game_x_clear_guesses(
+    Path(game_code): Path<String>,
+    session: Session,
+    State(state): State<AppState>,
+) -> Result<Response> {
+    let session_id = utils::session_id(&session)?;
+    let (user, _) = utils::require_user(&state, &session_id).await?.split();
+
+    if game_code.trim().is_empty() {
+        return Ok(Redirect::to("/").into_response());
+    }
+    let game_code = game_code.to_lowercase();
+
+    let game: Option<Game> = sqlx::query_as(
+        "SELECT * FROM games WHERE game_code = ? AND user_id = ? AND status = 'ACTIVE' LIMIT 1",
+    )
+    .bind(&game_code)
+    .bind(&user.user_id)
+    .fetch_optional(&state.db)
+    .await?;
+
+    let Some(_game) = game else {
+        return Ok(Redirect::to("/").into_response());
+    };
+
+    sqlx::query("DELETE FROM player_guesses WHERE game_code = ? AND outcome_id IS NULL")
+        .bind(&game_code)
+        .execute(&state.db)
+        .await?;
+
+    state
+        .pubsub
+        .host_actions
+        .publish(HostAction {
+            game_code: game_code.clone(),
+            typ: HostActionType::ClearGuesses,
+        })
+        .await?;
+
+    return Ok(Redirect::to(&format!("/games/{game_code}")).into_response());
+}
+
 #[derive(Template, Clone)]
 #[template(path = "game-as-host-item.html")]
 struct GameAsHostItemTemplate {
     game: Game,
     item: GameItemWithGuessCount,
+    any_guesses: bool,
     img_base_uri: String,
 }
 
@@ -1595,6 +1671,7 @@ LIMIT 1
     return Ok(Html(GameAsHostItemTemplate {
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
         game,
+        any_guesses: game_item.guess_count.map(|c| c > 0).unwrap_or(false),
         item: game_item,
     })
     .into_response());
@@ -1681,6 +1758,7 @@ LIMIT 1
     return Ok(Html(GameAsHostItemTemplate {
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
         game,
+        any_guesses: game_item.guess_count.map(|c| c > 0).unwrap_or(false),
         item: game_item,
     })
     .into_response());
@@ -1888,6 +1966,12 @@ async fn host_sse(
         let event = event?;
 
         match &event.typ {
+            PlayerActionType::EnableClearGuesses => {
+                return Ok(Event::default()
+                    .event("enable_clear_guesses")
+                    .data(format!(r#"<button hx-put="/games/{}/x/clear-guesses" class="btn btn-ghost btn-sm">Clear guesses</button>"#, event.game_code)))
+            }
+
             PlayerActionType::Join {
                 new_players_count: player_count,
             } => {
@@ -2012,6 +2096,7 @@ async fn player_sse(
             // }
             HostActionType::Lock
             | HostActionType::Unlock
+            | HostActionType::ClearGuesses
             | HostActionType::Enable { .. }
             | HostActionType::Disable { .. }
             | HostActionType::Choose { .. } => {

@@ -7,7 +7,7 @@
 {% endblock %}
 
 {% block scripts %}
-    <script type="text/javascript">
+    <script type="text/javascript" defer>
         // Created At
         document.getElementById("created_at").innerText = new Date({{ game.created_at * 1000 }}).toLocaleString();
 

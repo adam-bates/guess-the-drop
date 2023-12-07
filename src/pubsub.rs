@@ -114,6 +114,7 @@ pub struct PlayerAction {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum PlayerActionType {
+    EnableClearGuesses,
     Join { new_players_count: i64 },
     Guess { item_id: u64, new_guess_count: i32 },
     UndoGuess { item_id: u64, new_guess_count: i32 },
@@ -129,6 +130,7 @@ pub struct HostAction {
 pub enum HostActionType {
     Lock,
     Unlock,
+    ClearGuesses,
     Choose { item_id: u64 },
     Enable { item_id: u64 },
     Disable { item_id: u64 },
