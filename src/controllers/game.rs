@@ -670,7 +670,7 @@ async fn game_x_board(
     let (user, _) = utils::require_user(&state, &session_id).await?.split();
 
     if game_code.trim().is_empty() {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Missing game_code"))?;
     }
     let game_code = game_code.to_lowercase();
 
@@ -680,7 +680,7 @@ async fn game_x_board(
         .await?;
 
     let Some(game) = game else {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Game not found"))?;
     };
 
     if game.user_id == user.user_id {
@@ -810,7 +810,7 @@ WHERE
             .await?;
 
     let Some(game_player) = game_player else {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Player not found"))?;
     };
 
     let (guess, items, host, drops_count) = {
@@ -911,7 +911,7 @@ async fn game_x_lock(
     let (user, _) = utils::require_user(&state, &session_id).await?.split();
 
     if game_code.trim().is_empty() {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Missing game_code"))?;
     }
     let game_code = game_code.to_lowercase();
 
@@ -924,7 +924,7 @@ async fn game_x_lock(
     .await?;
 
     let Some(mut game) = game else {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Game not found"))?;
     };
 
     if !game.is_locked {
@@ -1019,7 +1019,7 @@ async fn game_x_unlock(
     let (user, _) = utils::require_user(&state, &session_id).await?.split();
 
     if game_code.trim().is_empty() {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Missing game_code"))?;
     }
     let game_code = game_code.to_lowercase();
 
@@ -1032,7 +1032,7 @@ async fn game_x_unlock(
     .await?;
 
     let Some(mut game) = game else {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Game not found"))?;
     };
 
     if game.is_locked {
@@ -1127,7 +1127,7 @@ async fn game_x_choose_item(
     let (user, _) = utils::require_user(&state, &session_id).await?.split();
 
     if game_code.trim().is_empty() {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Missing game_code"))?;
     }
     let game_code = game_code.to_lowercase();
 
@@ -1140,7 +1140,7 @@ async fn game_x_choose_item(
     .await?;
 
     let Some(mut game) = game else {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Game not found"))?;
     };
 
     let game_item: Option<GameItem> =
@@ -1151,7 +1151,7 @@ async fn game_x_choose_item(
             .await?;
 
     let Some(game_item) = game_item else {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Item not found"))?;
     };
 
     if !game_item.enabled {
@@ -1363,7 +1363,7 @@ async fn game_x_guess_item(
     let (user, _) = utils::require_user(&state, &session_id).await?.split();
 
     if game_code.trim().is_empty() {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Missing game_code"))?;
     }
     let game_code = game_code.to_lowercase();
 
@@ -1376,7 +1376,7 @@ async fn game_x_guess_item(
     .await?;
 
     let Some(game) = game else {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Game not found"))?;
     };
 
     let game_item: Option<GameItem> =
@@ -1387,7 +1387,7 @@ async fn game_x_guess_item(
             .await?;
 
     let Some(game_item) = game_item else {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Item not found"))?;
     };
 
     let game_player: Option<GamePlayer> =
@@ -1398,7 +1398,7 @@ async fn game_x_guess_item(
             .await?;
 
     let Some(game_player) = game_player else {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Player not found"))?;
     };
 
     let guess: Option<PlayerGuess> = sqlx::query_as("SELECT * FROM player_guesses WHERE game_code = ? AND player_id = ? AND outcome_id IS NULL LIMIT 1")
@@ -1548,7 +1548,7 @@ async fn game_x_clear_guesses(
     let (user, _) = utils::require_user(&state, &session_id).await?.split();
 
     if game_code.trim().is_empty() {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Missing game_code"))?;
     }
     let game_code = game_code.to_lowercase();
 
@@ -1561,7 +1561,7 @@ async fn game_x_clear_guesses(
     .await?;
 
     let Some(_game) = game else {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Game not found"))?;
     };
 
     sqlx::query("DELETE FROM player_guesses WHERE game_code = ? AND outcome_id IS NULL")
@@ -1599,7 +1599,7 @@ async fn game_x_enable_item(
     let (user, _) = utils::require_user(&state, &session_id).await?.split();
 
     if game_code.trim().is_empty() {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Missing game_code"))?;
     }
     let game_code = game_code.to_lowercase();
 
@@ -1612,7 +1612,7 @@ async fn game_x_enable_item(
     .await?;
 
     let Some(game) = game else {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Game not found"))?;
     };
 
     let game_item: Option<GameItemWithGuessCount> = sqlx::query_as(
@@ -1642,7 +1642,7 @@ LIMIT 1
     .await?;
 
     let Some(mut game_item) = game_item else {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Item not found"))?;
     };
 
     if !game_item.enabled {
@@ -1686,7 +1686,7 @@ async fn game_x_disable_item(
     let (user, _) = utils::require_user(&state, &session_id).await?.split();
 
     if game_code.trim().is_empty() {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Missing game_code"))?;
     }
     let game_code = game_code.to_lowercase();
 
@@ -1699,7 +1699,7 @@ async fn game_x_disable_item(
     .await?;
 
     let Some(game) = game else {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Game not found"))?;
     };
 
     let game_item: Option<GameItemWithGuessCount> = sqlx::query_as(
@@ -1729,7 +1729,7 @@ LIMIT 1
     .await?;
 
     let Some(mut game_item) = game_item else {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Item not found"))?;
     };
 
     if game_item.enabled {
@@ -1773,7 +1773,7 @@ async fn finish_game(
     let (user, _) = utils::require_user(&state, &session_id).await?.split();
 
     if game_code.trim().is_empty() {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Missing game_code"))?;
     }
     let game_code = game_code.to_lowercase();
 
@@ -1787,11 +1787,11 @@ async fn finish_game(
     .await?;
 
     let Some(mut game) = game else {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Game not found"))?;
     };
 
     if game.status != GAME_STATUS_ACTIVE {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Game is not active"))?;
     }
 
     sqlx::query("UPDATE games SET status = ? WHERE game_code = ?")
@@ -1914,7 +1914,7 @@ async fn host_sse(
     let (user, _) = utils::require_user(&state, &session_id).await?.split();
 
     if game_code.trim().is_empty() {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Missing game_code"))?;
     }
     let game_code = game_code.to_lowercase();
 
@@ -1928,11 +1928,11 @@ async fn host_sse(
     .await?;
 
     let Some(game) = game else {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Game not found"))?;
     };
 
     if game.status != GAME_STATUS_ACTIVE {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Game is not active"))?;
     }
 
     let guard = state.game_broadcasts.read().unwrap();
@@ -2022,7 +2022,7 @@ async fn player_sse(
     let (user, _) = utils::require_user(&state, &session_id).await?.split();
 
     if game_code.trim().is_empty() {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Missing game_code"))?;
     }
     let game_code = game_code.to_lowercase();
 
@@ -2036,11 +2036,11 @@ async fn player_sse(
     .await?;
 
     let Some(game) = game else {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Game not found"))?;
     };
 
     if game.status != GAME_STATUS_ACTIVE {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Game is not active"))?;
     }
 
     let game_player: Option<GamePlayer> =
@@ -2051,7 +2051,7 @@ async fn player_sse(
             .await?;
 
     let Some(_) = game_player else {
-        return Ok(Redirect::to("/").into_response());
+        return Err(anyhow::anyhow!("Player not found"))?;
     };
 
     let guard = state.game_broadcasts.read().unwrap();
