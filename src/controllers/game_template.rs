@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::BufWriter};
+use std::{collections::HashMap, io::BufWriter, sync::Arc};
 
 use super::utils;
 
@@ -10,12 +10,14 @@ use crate::{
 use askama::Template;
 use askama_axum::Response;
 use axum::{
+    body::Bytes,
     extract::{Multipart, Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Redirect},
     routing::get,
     Router,
 };
+use futures::future::join_all;
 use nanoid::nanoid;
 use serde::Deserialize;
 use tower_sessions::Session;
@@ -573,27 +575,31 @@ async fn post_template(
                 return Err(anyhow::anyhow!("Item {} has no name", key + 1))?;
             };
 
-            if let Some((_filename, bytes)) = &mut img {
-                let img = image::load_from_memory(&bytes)?;
+            let img_jh = tokio::spawn(async move {
+                if let Some((_filename, bytes)) = &mut img {
+                    let img = image::load_from_memory(&bytes)?;
 
-                const MAX_IMG_SIZE: u32 = 256;
-                if img.width() > MAX_IMG_SIZE || img.height() > MAX_IMG_SIZE {
-                    img.resize(
-                        MAX_IMG_SIZE,
-                        MAX_IMG_SIZE,
-                        image::imageops::FilterType::Nearest,
-                    );
+                    const MAX_IMG_SIZE: u32 = 256;
+                    if img.width() > MAX_IMG_SIZE || img.height() > MAX_IMG_SIZE {
+                        img.resize(
+                            MAX_IMG_SIZE,
+                            MAX_IMG_SIZE,
+                            image::imageops::FilterType::Nearest,
+                        );
+                    }
+
+                    let mut data = vec![0u8; 0];
+                    img.write_with_encoder(image::codecs::png::PngEncoder::new(BufWriter::new(
+                        &mut data,
+                    )))?;
+
+                    *bytes = data.into();
                 }
 
-                let mut data = vec![0u8; 0];
-                img.write_with_encoder(image::codecs::png::PngEncoder::new(BufWriter::new(
-                    &mut data,
-                )))?;
+                return Ok(img) as Result<Option<(String, Bytes)>>;
+            });
 
-                *bytes = data.into();
-            }
-
-            list.push((name, img, start_enabled == Some(true)));
+            list.push((name, img_jh, start_enabled.unwrap_or(false)));
         }
 
         list
@@ -602,21 +608,30 @@ async fn post_template(
     let items = {
         let mut list = vec![];
 
-        for (name, img, start_enabled) in items {
-            let img = if let Some((filename, bytes)) = img {
-                let key = format!("item_{}_{filename}", nanoid!());
+        for (name, img_jh, start_enabled) in items {
+            let bucket = state.bucket.clone();
+            list.push(tokio::spawn(async move {
+                let img = if let Some((filename, bytes)) = img_jh.await?? {
+                    let key = format!("item_{}_{filename}", nanoid!());
 
-                state.bucket.put_object(&key, &bytes).await?;
+                    bucket.put_object(&key, &bytes).await?;
 
-                Some(key)
-            } else {
-                None
-            };
+                    Some(key)
+                } else {
+                    None
+                };
 
-            list.push((name, img, start_enabled));
+                return Ok((name, img, start_enabled)) as Result<(String, Option<String>, bool)>;
+            }));
         }
 
-        list
+        let mut out = vec![];
+
+        for item in join_all(list).await {
+            out.push(item??);
+        }
+
+        out
     };
 
     sqlx::query("INSERT INTO game_templates (user_id, name, auto_lock, reward_message, total_reward_message) VALUES (?, ?, ?, ?, ?)")
@@ -674,7 +689,7 @@ async fn put_template(
     .fetch_optional(&state.db)
     .await?;
 
-    let Some(prev_game_template) = prev_game_template else {
+    let Some(_prev_game_template) = prev_game_template else {
         return Ok(StatusCode::NOT_FOUND.into_response());
     };
 
@@ -828,25 +843,29 @@ async fn put_template(
                 return Err(anyhow::anyhow!("Item {} has no name", key + 1))?;
             };
 
-            if let Some((_filename, bytes)) = &mut img {
-                let img = image::load_from_memory(&bytes)?;
+            let img_jh = tokio::spawn(async move {
+                if let Some((_filename, bytes)) = &mut img {
+                    let img = image::load_from_memory(&bytes)?;
 
-                const MAX_IMG_SIZE: u32 = 256;
-                if img.width() > MAX_IMG_SIZE || img.height() > MAX_IMG_SIZE {
-                    img.resize(
-                        MAX_IMG_SIZE,
-                        MAX_IMG_SIZE,
-                        image::imageops::FilterType::Nearest,
-                    );
+                    const MAX_IMG_SIZE: u32 = 256;
+                    if img.width() > MAX_IMG_SIZE || img.height() > MAX_IMG_SIZE {
+                        img.resize(
+                            MAX_IMG_SIZE,
+                            MAX_IMG_SIZE,
+                            image::imageops::FilterType::Nearest,
+                        );
+                    }
+
+                    let mut data = vec![0u8; 0];
+                    img.write_with_encoder(image::codecs::png::PngEncoder::new(BufWriter::new(
+                        &mut data,
+                    )))?;
+
+                    *bytes = data.into();
                 }
 
-                let mut data = vec![0u8; 0];
-                img.write_with_encoder(image::codecs::png::PngEncoder::new(BufWriter::new(
-                    &mut data,
-                )))?;
-
-                *bytes = data.into();
-            }
+                return Ok(img) as Result<Option<(String, Bytes)>>;
+            });
 
             if let Some(id) = id {
                 if !prev_game_items.contains_key(&id) {
@@ -856,42 +875,52 @@ async fn put_template(
                 }
             }
 
-            list.push((id, name, img, start_enabled == Some(true)));
+            list.push((id, name, img_jh, start_enabled.unwrap_or(false)));
         }
 
         list
     };
 
+    let prev_game_items = Arc::new(prev_game_items);
+
     let (items_to_create, items_to_update) = {
         let mut to_create = vec![];
         let mut to_update = vec![];
 
-        for (id, name, img, start_enabled) in items {
-            let img = if let Some((filename, bytes)) = img {
-                let key = format!("item_{}_{filename}", nanoid!());
+        for (id, name, img_jh, start_enabled) in items {
+            let is_update = id.is_some();
 
-                if let Some(id) = id {
-                    let prev_item = &prev_game_items[&id];
+            let bucket = state.bucket.clone();
+            let prev_game_items = prev_game_items.clone();
+            let jh = tokio::spawn(async move {
+                let img = if let Some((filename, bytes)) = img_jh.await?? {
+                    let key = format!("item_{}_{filename}", nanoid!());
 
-                    if let Some(img_key) = &prev_item.image {
-                        dbg!("Replacing [{img_key}] with {key}");
-                        let _ = state.bucket.delete_object(img_key).await;
+                    if let Some(id) = id {
+                        let prev_item = &prev_game_items[&id];
+
+                        if let Some(img_key) = &prev_item.image {
+                            let _ = bucket.delete_object(img_key).await;
+                        }
                     }
-                }
 
-                state.bucket.put_object(&key, &bytes).await?;
+                    bucket.put_object(&key, &bytes).await?;
 
-                Some(key)
-            } else if let Some(id) = id {
-                prev_game_items[&id].image.clone()
+                    Some(key)
+                } else if let Some(id) = id {
+                    prev_game_items[&id].image.clone()
+                } else {
+                    None
+                };
+
+                return Ok((id, name, img, start_enabled))
+                    as Result<(Option<u64>, String, Option<String>, bool)>;
+            });
+
+            if is_update {
+                to_update.push(jh);
             } else {
-                None
-            };
-
-            if let Some(id) = id {
-                to_update.push((id, name, img, start_enabled));
-            } else {
-                to_create.push((name, img, start_enabled));
+                to_create.push(jh);
             }
         }
 
@@ -916,16 +945,24 @@ async fn put_template(
 
         let mut q = sqlx::query(&query);
 
-        for (name, img, start_enabled) in items_to_create {
+        for r in join_all(items_to_create).await {
+            let (_, name, img, start_enabled) = r??;
+
             q = q.bind(&id).bind(name).bind(img).bind(start_enabled);
         }
 
         q.execute(&state.db).await?;
     }
 
-    let mut items_to_delete = prev_game_items;
+    let items_to_update = join_all(items_to_update).await;
 
-    for (id, name, img, start_enabled) in items_to_update {
+    let mut items_to_delete =
+        Arc::try_unwrap(prev_game_items).expect("Other instances should be dropped by now");
+
+    for r in items_to_update {
+        let (id, name, img, start_enabled) = r??;
+        let id = id.expect("id must be some value here");
+
         sqlx::query("UPDATE game_item_templates SET name = ?, image = ?, start_enabled = ? WHERE game_item_template_id = ?")
                 .bind(&name)
                 .bind(&img)
