@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use sqlx;
 
 pub const GAME_STATUS_ACTIVE: &str = "ACTIVE";
-pub const GAME_STATUS_INACTIVE: &str = "INACTIVE";
 pub const GAME_STATUS_FINISHED: &str = "FINISHED";
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Debug, Clone)]

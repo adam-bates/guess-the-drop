@@ -1,7 +1,4 @@
-use std::{
-    collections::HashSet,
-    time::{Duration, SystemTime},
-};
+use std::{collections::HashSet, time::SystemTime};
 
 use super::*;
 
@@ -793,7 +790,6 @@ WHERE
                 .iter()
                 .any(|item| item.guess_count.map(|c| c > 0).unwrap_or(false)),
             items,
-            user,
             players_count,
             drops_count,
             leaders,
@@ -879,7 +875,6 @@ WHERE
         game,
         host,
         guess,
-        user,
         items,
         player: game_player,
         drops_count,
@@ -894,7 +889,6 @@ struct GameAsHostBoardTemplate {
     game: Game,
     items: Vec<GameItemWithGuessCount>,
     any_guesses: bool,
-    user: User,
     players_count: i64,
     drops_count: i64,
     leaders: String,
@@ -1001,7 +995,6 @@ WHERE
             .iter()
             .any(|item| item.guess_count.map(|c| c > 0).unwrap_or(false)),
         items,
-        user,
         players_count,
         drops_count,
         lead_points,
@@ -1109,7 +1102,6 @@ WHERE
             .iter()
             .any(|item| item.guess_count.map(|c| c > 0).unwrap_or(false)),
         items,
-        user,
         players_count,
         drops_count,
         leaders,
@@ -1332,7 +1324,6 @@ WHERE
             .iter()
             .any(|item| item.guess_count.map(|c| c > 0).unwrap_or(false)),
         items,
-        user,
         players_count,
         drops_count,
         leaders,
@@ -1348,7 +1339,6 @@ struct GameAsPlayerBoardTemplate {
     host: User,
     guess: Option<PlayerGuess>,
     items: Vec<GameItem>,
-    user: User,
     player: GamePlayer,
     drops_count: i64,
     img_base_uri: String,
@@ -1530,7 +1520,6 @@ async fn game_x_guess_item(
         game,
         host,
         guess: Some(guess),
-        user,
         items,
         player: game_player,
         drops_count,
@@ -1586,7 +1575,6 @@ async fn game_x_clear_guesses(
 struct GameAsHostItemTemplate {
     game: Game,
     item: GameItemWithGuessCount,
-    any_guesses: bool,
     img_base_uri: String,
 }
 
@@ -1671,7 +1659,6 @@ LIMIT 1
     return Ok(Html(GameAsHostItemTemplate {
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
         game,
-        any_guesses: game_item.guess_count.map(|c| c > 0).unwrap_or(false),
         item: game_item,
     })
     .into_response());
@@ -1758,7 +1745,6 @@ LIMIT 1
     return Ok(Html(GameAsHostItemTemplate {
         img_base_uri: state.cfg.r2_bucket_public_url.clone(),
         game,
-        any_guesses: game_item.guess_count.map(|c| c > 0).unwrap_or(false),
         item: game_item,
     })
     .into_response());

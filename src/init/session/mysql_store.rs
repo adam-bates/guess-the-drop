@@ -32,48 +32,6 @@ impl MySqlStore {
             table_name: "session".to_string(),
         }
     }
-
-    /// Migrate the session schema.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use tower_sessions::{sqlx::MySqlPool, MySqlStore};
-    ///
-    /// # tokio_test::block_on(async {
-    /// let database_url = std::option_env!("DATABASE_URL").unwrap();
-    /// let pool = MySqlPool::connect(database_url).await.unwrap();
-    /// let session_store = MySqlStore::new(pool);
-    /// session_store.migrate().await.unwrap();
-    /// # })
-    /// ```
-    pub async fn migrate(&self) -> sqlx::Result<()> {
-        let mut tx = self.pool.begin().await?;
-
-        let create_schema_query = format!(
-            "create schema if not exists {schema_name}",
-            schema_name = self.schema_name,
-        );
-        sqlx::query(&create_schema_query).execute(&mut *tx).await?;
-
-        let create_table_query = format!(
-            r#"
-            create table if not exists `{schema_name}`.`{table_name}`
-            (
-                id char(36) primary key not null,
-                data blob not null,
-                expiry_date timestamp(6) not null
-            )
-            "#,
-            schema_name = self.schema_name,
-            table_name = self.table_name
-        );
-        sqlx::query(&create_table_query).execute(&mut *tx).await?;
-
-        tx.commit().await?;
-
-        Ok(())
-    }
 }
 
 #[async_trait]

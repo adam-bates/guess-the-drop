@@ -1,9 +1,7 @@
 use super::User;
 
-use crate::Result;
-
 use serde::{Deserialize, Serialize};
-use sqlx::{self, MySqlPool};
+use sqlx;
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Clone)]
 pub struct SessionAuth {
