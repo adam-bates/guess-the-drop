@@ -1,7 +1,7 @@
 {% extends "authed-base.html" %}
 
 {% block content %}
-    <form action="/game-templates", method="POST" enctype="multipart/form-data">
+    <form hx-post="/game-templates" hx-target="#body" enctype="multipart/form-data" hx-disabled-elt="#submit_btn" hx-indicator="#submit_ind">
         <div class="flex flex-col gap-5">
             <div>
                 <button type="button" onclick="cancel.showModal()" class="btn btn-error btn-sm text-black">
@@ -65,12 +65,14 @@
 
             <h3 class="text-lg">Items</h3>
 
-            <button type="button" hx-get="/game-templates/new/x/add-item?idx=0" hx-swap="outerHTML" class="btn btn-accent w-full max-w-lg text-black">
+            <span id="add_ind" class="htmx-indicator loading loading-spinner"></span>
+            <button type="button" hx-get="/game-templates/new/x/add-item?idx=0" hx-swap="outerHTML" hx-target="this" hx-disabled-elt="this" hx-indicator="#add_ind" class="btn btn-accent w-full max-w-lg text-black">
                 <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/PjxzdmcgY2xhc3M9ImZlYXRoZXIgZmVhdGhlci1wbHVzLXNxdWFyZSIgZmlsbD0ibm9uZSIgaGVpZ2h0PSIyNCIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLXdpZHRoPSIyIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHdpZHRoPSIyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiIHdpZHRoPSIxOCIgeD0iMyIgeT0iMyIvPjxsaW5lIHgxPSIxMiIgeDI9IjEyIiB5MT0iOCIgeTI9IjE2Ii8+PGxpbmUgeDE9IjgiIHgyPSIxNiIgeTE9IjEyIiB5Mj0iMTIiLz48L3N2Zz4=" />
                 Add Item
             </button>
 
-            <button type="submit" class="btn btn-primary w-full max-w-lg">Create Template</button>
+            <button id="submit_btn" type="submit" class="btn btn-primary w-full max-w-lg">Create Template</button>
+            <span id="submit_ind" class="htmx-indicator loading loading-spinner"></span>
         </div>
     </form>
 {% endblock %}

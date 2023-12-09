@@ -1,12 +1,14 @@
 <div id="add-item-{{ idx }}" class="form-control w-full max-w-lg">
     <label for="items[{{ idx }}].name" class="label flex flex-row gap-4 justify-start">
-        <button type="button" hx-get="/health" hx-on="click" hx-target="#add-item-{{ idx }}" hx-swap="delete" class="link link-error no-underline">
+        <button type="button" hx-get="/health" hx-on="click" hx-target="#add-item-{{ idx }}" hx-swap="delete" hx-disabled-elt="this" hx-indicator="#add_item_ind_{{ idx }}" class="link link-error no-underline">
             -
         </button>
 
         <span class="label-text">
             Item {{ idx + 1 }}
         </span>
+
+        <span id="add_item_ind_{{ idx }}" class="htmx-indicator loading loading-spinner"></span>
     </label>
 
     <div class="w-full max-w-lg bordered flex flex-col gap-2">
@@ -22,7 +24,8 @@
     </div>
 </div>
 
-<button type="button" hx-get="/game-templates/{{ template.game_template_id }}/x/add-item?idx={{ idx + 1 }}" hx-swap="outerHTML" hx-target="this" class="btn btn-accent w-full max-w-lg text-black">
+<span id="add_ind" class="htmx-indicator loading loading-spinner"></span>
+<button type="button" hx-get="/game-templates/{{ template.game_template_id }}/x/add-item?idx={{ idx + 1 }}" hx-swap="outerHTML" hx-target="this" hx-disabled-elt="this" hx-indicator="#add_ind" class="btn btn-accent w-full max-w-lg text-black">
     <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/PjxzdmcgY2xhc3M9ImZlYXRoZXIgZmVhdGhlci1wbHVzLXNxdWFyZSIgZmlsbD0ibm9uZSIgaGVpZ2h0PSIyNCIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLXdpZHRoPSIyIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHdpZHRoPSIyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiIHdpZHRoPSIxOCIgeD0iMyIgeT0iMyIvPjxsaW5lIHgxPSIxMiIgeDI9IjEyIiB5MT0iOCIgeTI9IjE2Ii8+PGxpbmUgeDE9IjgiIHgyPSIxNiIgeTE9IjEyIiB5Mj0iMTIiLz48L3N2Zz4=" />
     Add Item
 </button>
