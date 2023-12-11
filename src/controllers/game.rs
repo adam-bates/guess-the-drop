@@ -17,7 +17,7 @@ use askama::Template;
 use axum::{
     extract::{Path, Query, State},
     response::{
-        sse::{Event, Sse},
+        sse::{Event, KeepAlive, Sse},
         IntoResponse, Redirect, Response,
     },
     routing::{get, post, put},
@@ -1996,7 +1996,13 @@ async fn host_sse(
         }
     });
 
-    return Ok(Sse::new(stream).into_response());
+    return Ok(Sse::new(stream)
+        .keep_alive(
+            KeepAlive::new()
+                .interval(std::time::Duration::from_secs(3))
+                .text("keep-alive"),
+        )
+        .into_response());
 }
 
 async fn player_sse(
@@ -2008,7 +2014,7 @@ async fn player_sse(
     let (user, _) = utils::require_user(&state, &session_id).await?.split();
 
     if game_code.trim().is_empty() {
-        return Err(anyhow::anyhow!("Missing game_code"))?;
+        return Ok(Redirect::to("/").into_response());
     }
     let game_code = game_code.to_lowercase();
 
@@ -2022,11 +2028,11 @@ async fn player_sse(
     .await?;
 
     let Some(game) = game else {
-        return Err(anyhow::anyhow!("Game not found"))?;
+        return Ok(Redirect::to("/").into_response());
     };
 
     if game.status != GAME_STATUS_ACTIVE {
-        return Err(anyhow::anyhow!("Game is not active"))?;
+        return Ok(Redirect::to(&format!("/games/{game_code}")).into_response());
     }
 
     let game_player: Option<GamePlayer> =
@@ -2037,7 +2043,7 @@ async fn player_sse(
             .await?;
 
     let Some(_) = game_player else {
-        return Err(anyhow::anyhow!("Player not found"))?;
+        return Ok(Redirect::to(&format!("/games/{game_code}")).into_response());
     };
 
     let guard = state.game_broadcasts.read().unwrap();
@@ -2091,5 +2097,11 @@ async fn player_sse(
         }
     });
 
-    return Ok(Sse::new(stream).into_response());
+    return Ok(Sse::new(stream)
+        .keep_alive(
+            KeepAlive::new()
+                .interval(std::time::Duration::from_secs(3))
+                .text("keep-alive"),
+        )
+        .into_response());
 }
