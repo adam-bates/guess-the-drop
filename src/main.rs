@@ -375,6 +375,8 @@ async fn send_chat_messages(cfg: Arc<Config>, db: MySqlPool) -> Result {
                         dbg!(e);
                     }
                 }
+
+                tokio::time::sleep(std::time::Duration::from_millis(250)).await;
             }
 
             let q = format!(

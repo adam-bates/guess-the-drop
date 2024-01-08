@@ -1,4 +1,4 @@
-<div id="card-{{ item.game_item_id }}" class="card bg-base-100 shadow-xl md:min-h-[250px] md:max-h-[250px]">
+<div id="card-{{ item.game_item_id }}" class="card {% if item.enabled %} bg-base-100 {% endif %} shadow-xl md:min-h-[250px] md:max-h-[250px]">
     <div class="card-body flex flex-col gap-4">
         <h2 class="card-title md:text-2xl">
             {{ item.name }}
