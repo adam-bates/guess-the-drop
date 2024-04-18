@@ -1,31 +1,31 @@
 use async_trait::async_trait;
-use sqlx::{types::time::OffsetDateTime, MySqlPool};
+use sqlx::{types::time::OffsetDateTime, PgPool};
 
 use tower_sessions::{session::Id, ExpiredDeletion, Session, SessionStore, SqlxStoreError};
 
-/// A MySQL session store.
+/// A Posgres session store.
 #[derive(Clone, Debug)]
-pub struct MySqlStore {
-    pub pool: MySqlPool,
+pub struct PostgresStore {
+    pub pool: PgPool,
     pub schema_name: String,
     pub table_name: String,
 }
 
-impl MySqlStore {
-    /// Create a new MySqlStore store with the provided connection pool.
+impl PostgresStore {
+    /// Create a new PostgresStore store with the provided connection pool.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use tower_sessions::{sqlx::MySqlPool, MySqlStore};
+    /// use tower_sessions::{sqlx::PgPool, PostgresStore};
     ///
     /// # tokio_test::block_on(async {
     /// let database_url = std::option_env!("DATABASE_URL").unwrap();
-    /// let pool = MySqlPool::connect(database_url).await.unwrap();
-    /// let session_store = MySqlStore::new(pool);
+    /// let pool = PgPool::connect(database_url).await.unwrap();
+    /// let session_store = PostgresStore::new(pool);
     /// # })
     /// ```
-    pub fn new(pool: MySqlPool) -> Self {
+    pub fn new(pool: PgPool) -> Self {
         Self {
             pool,
             schema_name: "tower_sessions".to_string(),
@@ -35,11 +35,11 @@ impl MySqlStore {
 }
 
 #[async_trait]
-impl ExpiredDeletion for MySqlStore {
+impl ExpiredDeletion for PostgresStore {
     async fn delete_expired(&self) -> Result<(), Self::Error> {
         let query = format!(
             r#"
-            delete from `{schema_name}`.`{table_name}`
+            delete from "{schema_name}"."{table_name}"
             where expiry_date < utc_timestamp()
             "#,
             schema_name = self.schema_name,
@@ -51,14 +51,14 @@ impl ExpiredDeletion for MySqlStore {
 }
 
 #[async_trait]
-impl SessionStore for MySqlStore {
+impl SessionStore for PostgresStore {
     type Error = SqlxStoreError;
 
     async fn save(&self, session: &Session) -> Result<(), Self::Error> {
         let query = format!(
             r#"
-            insert into `{schema_name}`.`{table_name}`
-              (id, data, expiry_date) values (?, ?, ?)
+            insert into "{schema_name}"."{table_name}"
+              (id, data, expiry_date) values ($1, $2, $3)
             on duplicate key update
               data = values(data),
               expiry_date = values(expiry_date)
@@ -79,8 +79,8 @@ impl SessionStore for MySqlStore {
     async fn load(&self, session_id: &Id) -> Result<Option<Session>, Self::Error> {
         let query = format!(
             r#"
-            select data from `{schema_name}`.`{table_name}`
-            where id = ? and expiry_date > ?
+            select data from "{schema_name}"."{table_name}"
+            where id = $1 and expiry_date > $2
             "#,
             schema_name = self.schema_name,
             table_name = self.table_name
@@ -100,7 +100,7 @@ impl SessionStore for MySqlStore {
 
     async fn delete(&self, session_id: &Id) -> Result<(), Self::Error> {
         let query = format!(
-            r#"delete from `{schema_name}`.`{table_name}` where id = ?"#,
+            r#"delete from "{schema_name}"."{table_name}" where id = $1"#,
             schema_name = self.schema_name,
             table_name = self.table_name
         );

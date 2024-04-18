@@ -28,7 +28,7 @@ use pubsub::{HostAction, PlayerAction, PubSubClients};
 use reqwest::{header::LOCATION, Method};
 use result::AppError;
 use s3::Bucket;
-use sqlx::MySqlPool;
+use sqlx::PgPool;
 use tokio::sync::broadcast;
 use tower::ServiceBuilder;
 use tower_http::{
@@ -75,7 +75,7 @@ lazy_static! {
 pub struct AppState {
     pub cfg: Arc<Config>,
     pub bucket: Bucket,
-    pub db: MySqlPool,
+    pub db: PgPool,
     pub pubsub: Arc<PubSubClients>,
     pub game_broadcasts: Arc<RwLock<HashMap<String, GameBroadcast>>>,
 }
@@ -89,70 +89,70 @@ pub struct GameBroadcast {
 #[tokio::main]
 async fn main() -> Result {
     tracing_subscriber::fmt()
-        // .with_max_level(tracing::Level::DEBUG)
+        .with_max_level(tracing::Level::DEBUG)
         .init();
 
     let cfg = Arc::new(config::load()?);
 
     let bucket = init::s3::init_s3_bucket(&cfg)?;
-    let db = init::db::init_mysql_pool(&cfg).await?;
+    let db = init::db::init_pg_pool(&cfg).await?;
     let session_store = init::session::init_session_store(&cfg, db.clone()).await?;
     let pubsub = init::pubsub::init_pubsub(&cfg).await?;
     let game_broadcasts: Arc<RwLock<HashMap<String, GameBroadcast>>> =
         Arc::new(RwLock::new(HashMap::new()));
 
-    {
-        let pubsub = pubsub.clone();
-        let game_broadcasts = game_broadcasts.clone();
+    // {
+    //     let pubsub = pubsub.clone();
+    //     let game_broadcasts = game_broadcasts.clone();
 
-        tokio::spawn(async move {
-            let mut stream = pubsub.host_actions.subscribe().await.unwrap();
+    //     tokio::spawn(async move {
+    //         let mut stream = pubsub.host_actions.subscribe().await.unwrap();
 
-            while let Some(value) = stream.next().await {
-                if let Ok(game_broadcasts) = game_broadcasts.read() {
-                    if let Some(broadcast) = game_broadcasts.get(&value.game_code) {
-                        let _ = broadcast.to_players.send(value);
-                    }
-                }
-            }
-        });
-    }
+    //         while let Some(value) = stream.next().await {
+    //             if let Ok(game_broadcasts) = game_broadcasts.read() {
+    //                 if let Some(broadcast) = game_broadcasts.get(&value.game_code) {
+    //                     let _ = broadcast.to_players.send(value);
+    //                 }
+    //             }
+    //         }
+    //     });
+    // }
 
-    {
-        let pubsub = pubsub.clone();
-        let game_broadcasts = game_broadcasts.clone();
+    // {
+    //     let pubsub = pubsub.clone();
+    //     let game_broadcasts = game_broadcasts.clone();
 
-        tokio::spawn(async move {
-            let mut stream = pubsub.player_actions.subscribe().await.unwrap();
+    //     tokio::spawn(async move {
+    //         let mut stream = pubsub.player_actions.subscribe().await.unwrap();
 
-            while let Some(value) = stream.next().await {
-                if let Ok(game_broadcasts) = game_broadcasts.read() {
-                    if let Some(broadcast) = game_broadcasts.get(&value.game_code) {
-                        let _ = broadcast.to_host.send(value);
-                    }
-                }
-            }
-        });
-    }
+    //         while let Some(value) = stream.next().await {
+    //             if let Ok(game_broadcasts) = game_broadcasts.read() {
+    //                 if let Some(broadcast) = game_broadcasts.get(&value.game_code) {
+    //                     let _ = broadcast.to_host.send(value);
+    //                 }
+    //             }
+    //         }
+    //     });
+    // }
 
-    {
-        let cfg = cfg.clone();
-        let db = db.clone();
+    // {
+    //     let cfg = cfg.clone();
+    //     let db = db.clone();
 
-        tokio::spawn(async move {
-            loop {
-                // println!("Sending messages ...");
+    //     tokio::spawn(async move {
+    //         loop {
+    //             // println!("Sending messages ...");
 
-                match send_chat_messages(cfg.clone(), db.clone()).await {
-                    Ok(()) => {}
+    //             match send_chat_messages(cfg.clone(), db.clone()).await {
+    //                 Ok(()) => {}
 
-                    Err(e) => {
-                        dbg!(&e);
-                    }
-                }
-            }
-        });
-    }
+    //                 Err(e) => {
+    //                     dbg!(&e);
+    //                 }
+    //             }
+    //         }
+    //     });
+    // }
 
     let addr = format!("0.0.0.0:{}", cfg.server_port.unwrap()).parse()?;
 
@@ -266,7 +266,7 @@ async fn add_redirect_header<B>(req: Request<B>, next: Next<B>) -> Response {
     return res;
 }
 
-async fn send_chat_messages(cfg: Arc<Config>, db: MySqlPool) -> Result {
+async fn send_chat_messages(cfg: Arc<Config>, db: PgPool) -> Result {
     let count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM chat_messages WHERE lock_id IS NULL AND sent = false",
     )
@@ -404,7 +404,7 @@ async fn send_chat_messages(cfg: Arc<Config>, db: MySqlPool) -> Result {
 #[derive(Debug)]
 struct DbTokenStorage {
     user_id: String,
-    db: MySqlPool,
+    db: PgPool,
     cfg: Arc<Config>,
 }
 
@@ -448,8 +448,8 @@ impl twitch_irc::login::TokenStorage for DbTokenStorage {
         sqlx::query("UPDATE session_auths SET access_token = ?, refresh_token = ?, created_at = ?, expiry = ? WHERE user_id = ? AND client_id = ? AND can_chat = true")
             .bind(&token.access_token)
             .bind(&token.refresh_token)
-            .bind(token.created_at.timestamp() as u64)
-            .bind(token.expires_at.map(|e| e.timestamp() as u64))
+            .bind(token.created_at.timestamp() as i64)
+            .bind(token.expires_at.map(|e| e.timestamp() as i64))
             .bind(&self.user_id)
             .bind(self.cfg.twitch_client_id.as_str())
             .execute(&self.db)

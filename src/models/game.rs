@@ -10,8 +10,8 @@ pub struct Game {
     pub user_id: String,
 
     pub status: String,
-    pub created_at: u64,
-    pub active_at: u64,
+    pub created_at: i64,
+    pub active_at: i64,
 
     pub name: String,
     pub auto_lock: bool,
@@ -27,8 +27,8 @@ pub struct GameWithJoinedSummary {
     pub user_id: String,
 
     pub status: String,
-    pub created_at: u64,
-    pub active_at: u64,
+    pub created_at: i64,
+    pub active_at: i64,
 
     pub name: String,
     pub auto_lock: bool,
@@ -54,8 +54,8 @@ pub struct GameWithHostedSummary {
     pub user_id: String,
 
     pub status: String,
-    pub created_at: u64,
-    pub active_at: u64,
+    pub created_at: i64,
+    pub active_at: i64,
 
     pub name: String,
     pub auto_lock: bool,

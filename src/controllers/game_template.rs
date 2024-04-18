@@ -91,7 +91,7 @@ async fn templates(session: Session, State(state): State<AppState>) -> Result<im
     let (user, session) = utils::require_user(&state, &sid).await?.split();
 
     let game_templates: Vec<GameTemplate> =
-        sqlx::query_as("SELECT * FROM game_templates WHERE user_id = ?")
+        sqlx::query_as("SELECT * FROM game_templates WHERE user_id = $1")
             .bind(&user.user_id)
             .fetch_all(&state.db)
             .await?;
@@ -207,11 +207,12 @@ async fn edit_template(
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Response> {
+    let id = id as i64;
     let sid = utils::session_id(&session)?;
     let (user, session) = utils::require_user(&state, &sid).await?.split();
 
     let game_template: Option<GameTemplate> = sqlx::query_as(
-        "SELECT * FROM game_templates WHERE game_template_id = ? AND user_id = ? LIMIT 1",
+        "SELECT * FROM game_templates WHERE game_template_id = $1 AND user_id = $2 LIMIT 1",
     )
     .bind(&id)
     .bind(&user.user_id)
@@ -222,7 +223,7 @@ async fn edit_template(
     };
 
     let game_item_templates: Vec<GameItemTemplate> =
-        sqlx::query_as("SELECT * FROM game_item_templates WHERE game_template_id = ?")
+        sqlx::query_as("SELECT * FROM game_item_templates WHERE game_template_id = $1")
             .bind(&game_template.game_template_id)
             .fetch_all(&state.db)
             .await?;
@@ -255,11 +256,12 @@ async fn edit_template_x_add_item(
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Response> {
+    let id = id as i64;
     let sid = utils::session_id(&session)?;
     let (user, _) = utils::require_user(&state, &sid).await?.split();
 
     let game_template: Option<GameTemplate> = sqlx::query_as(
-        "SELECT * FROM game_templates WHERE game_template_id = ? AND user_id = ? LIMIT 1",
+        "SELECT * FROM game_templates WHERE game_template_id = $1 AND user_id = $2 LIMIT 1",
     )
     .bind(&id)
     .bind(&user.user_id)
@@ -290,11 +292,12 @@ async fn edit_template_x_post_msg(
     session: Session,
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse> {
+    let id = id as i64;
     let sid = utils::session_id(&session)?;
     let (user, session_auth) = utils::require_user(&state, &sid).await?.split();
 
     let game_template: Option<GameTemplate> = sqlx::query_as(
-        "SELECT * FROM game_templates WHERE game_template_id = ? AND user_id = ? LIMIT 1",
+        "SELECT * FROM game_templates WHERE game_template_id = $1 AND user_id = $2 LIMIT 1",
     )
     .bind(&id)
     .bind(&user.user_id)
@@ -324,11 +327,12 @@ async fn edit_template_x_no_post_msg(
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Response> {
+    let id = id as i64;
     let sid = utils::session_id(&session)?;
     let (user, _) = utils::require_user(&state, &sid).await?.split();
 
     let game_template: Option<GameTemplate> = sqlx::query_as(
-        "SELECT * FROM game_templates WHERE game_template_id = ? AND user_id = ? LIMIT 1",
+        "SELECT * FROM game_templates WHERE game_template_id = $1 AND user_id = $2 LIMIT 1",
     )
     .bind(&id)
     .bind(&user.user_id)
@@ -358,11 +362,12 @@ async fn edit_template_x_post_total_msg(
     session: Session,
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse> {
+    let id = id as i64;
     let sid = utils::session_id(&session)?;
     let (user, session_auth) = utils::require_user(&state, &sid).await?.split();
 
     let game_template: Option<GameTemplate> = sqlx::query_as(
-        "SELECT * FROM game_templates WHERE game_template_id = ? AND user_id = ? LIMIT 1",
+        "SELECT * FROM game_templates WHERE game_template_id = $1 AND user_id = $2 LIMIT 1",
     )
     .bind(&id)
     .bind(&user.user_id)
@@ -392,11 +397,12 @@ async fn edit_template_x_no_post_total_msg(
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Response> {
+    let id = id as i64;
     let sid = utils::session_id(&session)?;
     let (user, _) = utils::require_user(&state, &sid).await?.split();
 
     let game_template: Option<GameTemplate> = sqlx::query_as(
-        "SELECT * FROM game_templates WHERE game_template_id = ? AND user_id = ? LIMIT 1",
+        "SELECT * FROM game_templates WHERE game_template_id = $1 AND user_id = $2 LIMIT 1",
     )
     .bind(&id)
     .bind(&user.user_id)
@@ -616,7 +622,7 @@ async fn post_template(
         out
     };
 
-    sqlx::query("INSERT INTO game_templates (user_id, name, auto_lock, reward_message, total_reward_message) VALUES (?, ?, ?, ?, ?)")
+    sqlx::query("INSERT INTO game_templates (user_id, name, auto_lock, reward_message, total_reward_message) VALUES ($1, $2, $3, $4, $5)")
         .bind(&user.user_id)
         .bind(&name)
         .bind(&auto_lock)
@@ -626,7 +632,7 @@ async fn post_template(
         .await?;
 
     let record: GameTemplate =
-        sqlx::query_as("SELECT * FROM game_templates WHERE user_id = ? AND name = ? LIMIT 1")
+        sqlx::query_as("SELECT * FROM game_templates WHERE user_id = $1 AND name = $2 LIMIT 1")
             .bind(&user.user_id)
             .bind(&name)
             .fetch_one(&state.db)
@@ -635,7 +641,12 @@ async fn post_template(
     if !items.is_empty() {
         let query = format!(
             "INSERT INTO game_item_templates (game_template_id, name, image, start_enabled) VALUES {}",
-            items.iter().map(|_| "(?, ?, ?, ?)").collect::<Vec<&'static str>>().join(",")
+            items
+                .iter()
+                .enumerate()
+                .map(|(idx, _)| format!("(${}, ${}, ${}, ${})", idx + 1, idx + 2, idx + 3, idx + 4))
+                .collect::<Vec<String>>()
+                .join(",")
         );
 
         let mut q = sqlx::query(&query);
@@ -660,11 +671,12 @@ async fn put_template(
     State(state): State<AppState>,
     mut form: Multipart,
 ) -> Result<Response> {
+    let id = id as i64;
     let sid = utils::session_id(&session)?;
     let (user, _) = utils::require_user(&state, &sid).await?.split();
 
     let prev_game_template: Option<GameTemplate> = sqlx::query_as(
-        "SELECT * FROM game_templates WHERE game_template_id = ? AND user_id = ? LIMIT 1",
+        "SELECT * FROM game_templates WHERE game_template_id = $1 AND user_id = $2 LIMIT 1",
     )
     .bind(&id)
     .bind(&user.user_id)
@@ -676,12 +688,12 @@ async fn put_template(
     };
 
     let prev_game_items: Vec<GameItemTemplate> =
-        sqlx::query_as("SELECT * FROM game_item_templates WHERE game_template_id = ?")
+        sqlx::query_as("SELECT * FROM game_item_templates WHERE game_template_id = $1")
             .bind(&id)
             .fetch_all(&state.db)
             .await?;
 
-    let prev_game_items: HashMap<u64, GameItemTemplate> = prev_game_items
+    let prev_game_items: HashMap<i64, GameItemTemplate> = prev_game_items
         .into_iter()
         .map(|t| (t.game_item_template_id, t))
         .collect();
@@ -754,7 +766,7 @@ async fn put_template(
 
                 match &item_field_name[(close_idx + 2)..] {
                     "id" => {
-                        *item_id = Some(field.text().await?.parse::<u64>()?);
+                        *item_id = Some(field.text().await?.parse::<i64>()?);
                     }
                     "name" => {
                         *item_name = Some(field.text().await?.trim().to_string());
@@ -896,7 +908,7 @@ async fn put_template(
                 };
 
                 return Ok((id, name, img, start_enabled))
-                    as Result<(Option<u64>, String, Option<String>, bool)>;
+                    as Result<(Option<i64>, String, Option<String>, bool)>;
             });
 
             if is_update {
@@ -909,7 +921,7 @@ async fn put_template(
         (to_create, to_update)
     };
 
-    sqlx::query("UPDATE game_templates SET name = ?, auto_lock = ?, reward_message = ?, total_reward_message = ? WHERE game_template_id = ? AND user_id = ?")
+    sqlx::query("UPDATE game_templates SET name = $1, auto_lock = $2, reward_message = $3, total_reward_message = $4 WHERE game_template_id = $5 AND user_id = $6")
         .bind(&name)
         .bind(&auto_lock)
         .bind(&reward_message)
@@ -922,7 +934,12 @@ async fn put_template(
     if !items_to_create.is_empty() {
         let query = format!(
             "INSERT INTO game_item_templates (game_template_id, name, image, start_enabled) VALUES {}",
-            items_to_create.iter().map(|_| "(?, ?, ?, ?)").collect::<Vec<&'static str>>().join(",")
+            items_to_create
+                .iter()
+                .enumerate()
+                .map(|(idx, _)| format!("(${}, ${}, ${}, ${})", idx + 1, idx + 2, idx + 3, idx + 4))
+                .collect::<Vec<String>>()
+                .join(",")
         );
 
         let mut q = sqlx::query(&query);
@@ -945,7 +962,7 @@ async fn put_template(
         let (id, name, img, start_enabled) = r??;
         let id = id.expect("id must be some value here");
 
-        sqlx::query("UPDATE game_item_templates SET name = ?, image = ?, start_enabled = ? WHERE game_item_template_id = ?")
+        sqlx::query("UPDATE game_item_templates SET name = $1, image = $2, start_enabled = $3 WHERE game_item_template_id = $4")
                 .bind(&name)
                 .bind(&img)
                 .bind(&start_enabled)
@@ -957,7 +974,7 @@ async fn put_template(
     }
 
     for id in items_to_delete.keys() {
-        sqlx::query("DELETE FROM game_item_templates WHERE game_item_template_id = ?")
+        sqlx::query("DELETE FROM game_item_templates WHERE game_item_template_id = $1")
             .bind(&id)
             .execute(&state.db)
             .await?;
@@ -971,11 +988,12 @@ async fn delete_template(
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Response> {
+    let id = id as i64;
     let sid = utils::session_id(&session)?;
     let (user, _) = utils::require_user(&state, &sid).await?.split();
 
     let prev_game_template = sqlx::query(
-        "SELECT * FROM game_templates WHERE game_template_id = ? AND user_id = ? LIMIT 1",
+        "SELECT * FROM game_templates WHERE game_template_id = $1 AND user_id = $2 LIMIT 1",
     )
     .bind(&id)
     .bind(&user.user_id)
@@ -987,7 +1005,7 @@ async fn delete_template(
     }
 
     let prev_game_items: Vec<GameItemTemplate> =
-        sqlx::query_as("SELECT * FROM game_item_templates WHERE game_template_id = ?")
+        sqlx::query_as("SELECT * FROM game_item_templates WHERE game_template_id = $1")
             .bind(&id)
             .fetch_all(&state.db)
             .await?;
@@ -998,12 +1016,12 @@ async fn delete_template(
         }
     }
 
-    sqlx::query("DELETE FROM game_item_templates WHERE game_template_id = ?")
+    sqlx::query("DELETE FROM game_item_templates WHERE game_template_id = $1")
         .bind(&id)
         .execute(&state.db)
         .await?;
 
-    sqlx::query("DELETE FROM game_templates WHERE game_template_id = ?")
+    sqlx::query("DELETE FROM game_templates WHERE game_template_id = $1")
         .bind(&id)
         .execute(&state.db)
         .await?;

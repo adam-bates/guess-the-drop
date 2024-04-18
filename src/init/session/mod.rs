@@ -1,26 +1,26 @@
-mod mysql_store;
-use mysql_store::MySqlStore;
+mod postgres_store;
+use postgres_store::PostgresStore;
 
 use crate::prelude::*;
 
-use sqlx::MySqlPool;
+use sqlx::PgPool;
 use tower_sessions::{CachingSessionStore, MokaStore};
 
 const SESSION_CACHE_CAPACITY: u64 = 2000;
 
 pub async fn init_session_store(
     cfg: &Config,
-    db: MySqlPool,
-) -> Result<CachingSessionStore<MokaStore, MySqlStore>> {
-    let mut db_session_store = MySqlStore::new(db.clone());
+    db: PgPool,
+) -> Result<CachingSessionStore<MokaStore, PostgresStore>> {
+    let mut db_session_store = PostgresStore::new(db.clone());
     db_session_store.schema_name = cfg.db_database.clone();
 
     let create_table_query = format!(
         r#"
-            create table if not exists `{schema_name}`.`{table_name}`
+            create table if not exists "{schema_name}"."{table_name}"
             (
                 id char(36) primary key not null,
-                data blob not null,
+                data bytea not null,
                 expiry_date timestamp(6) not null
             )
             "#,

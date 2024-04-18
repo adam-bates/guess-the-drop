@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS game_winners (
     game_winner_id SERIAL PRIMARY KEY,
-    game_player_id BIGINT UNSIGNED NOT NULL,
+    game_player_id BIGINT NOT NULL,
     game_code VARCHAR(128) NOT NULL
 );
 

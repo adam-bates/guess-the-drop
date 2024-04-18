@@ -3,7 +3,7 @@ use sqlx;
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Debug, Clone)]
 pub struct GameItem {
-    pub game_item_id: u64,
+    pub game_item_id: i64,
     pub game_code: String,
 
     pub name: String,
@@ -14,7 +14,7 @@ pub struct GameItem {
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Debug, Clone)]
 pub struct GameItemWithGuessCount {
-    pub game_item_id: u64,
+    pub game_item_id: i64,
     pub game_code: String,
 
     pub name: String,

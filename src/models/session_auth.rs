@@ -3,27 +3,27 @@ use super::User;
 use serde::{Deserialize, Serialize};
 use sqlx;
 
-#[derive(sqlx::FromRow, Serialize, Deserialize, Clone)]
+#[derive(sqlx::FromRow, Serialize, Deserialize, Clone, Debug)]
 pub struct SessionAuth {
-    pub id: u64,
+    pub id: i64,
     pub sid: String,
     pub user_id: String,
     pub access_token: String,
     pub refresh_token: String,
-    pub created_at: u64,
-    pub expiry: u64,
+    pub created_at: i64,
+    pub expiry: i64,
     pub can_chat: bool,
 }
 
-#[derive(sqlx::FromRow, Serialize, Deserialize, Clone)]
+#[derive(sqlx::FromRow, Serialize, Deserialize, Clone, Debug)]
 pub struct SessionAuthWithUser {
-    pub id: u64,
+    pub id: i64,
     pub sid: String,
     pub user_id: String,
     pub access_token: String,
     pub refresh_token: String,
-    pub created_at: u64,
-    pub expiry: u64,
+    pub created_at: i64,
+    pub expiry: i64,
     pub can_chat: bool,
 
     pub username: String,

@@ -5,8 +5,8 @@ CREATE TABLE IF NOT EXISTS session_auths (
 	client_id VARCHAR(128) NOT NULL,
     access_token VARCHAR(1024) NOT NULL,
     refresh_token VARCHAR(1024) NOT NULL,
-	created_at BIGINT UNSIGNED NOT NULL,
-	expiry BIGINT UNSIGNED NOT NULL,
+	created_at BIGINT NOT NULL,
+	expiry BIGINT NOT NULL,
 	can_chat BOOLEAN NOT NULL
 );
 

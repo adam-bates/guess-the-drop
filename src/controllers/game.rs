@@ -89,7 +89,7 @@ async fn join(
 
     let game_code = game_code.to_lowercase();
 
-    let game = sqlx::query("SELECT * FROM games WHERE game_code = ? LIMIT 1")
+    let game = sqlx::query("SELECT * FROM games WHERE game_code = $1 LIMIT 1")
         .bind(&game_code)
         .fetch_optional(&state.db)
         .await?;
@@ -122,9 +122,9 @@ async fn post_game(
     let (user, _) = utils::require_user(&state, &sid).await?.split();
 
     let game_template: Option<GameTemplate> = sqlx::query_as(
-        "SELECT * FROM game_templates WHERE game_template_id = ? AND user_id = ? LIMIT 1",
+        "SELECT * FROM game_templates WHERE game_template_id = $1 AND user_id = $2 LIMIT 1",
     )
-    .bind(&body.template)
+    .bind(&(body.template as i64))
     .bind(&user.user_id)
     .fetch_optional(&state.db)
     .await?;
@@ -134,7 +134,7 @@ async fn post_game(
     };
 
     let game_item_templates: Vec<GameItemTemplate> =
-        sqlx::query_as("SELECT * FROM game_item_templates WHERE game_template_id = ?")
+        sqlx::query_as("SELECT * FROM game_item_templates WHERE game_template_id = $1")
             .bind(&game_template.game_template_id)
             .fetch_all(&state.db)
             .await?;
@@ -151,7 +151,7 @@ async fn post_game(
 
             game_code = nanoid!(GAME_CODE_LENGTH, &GAME_CODE_CHARS);
 
-            let existing: Option<Game> = sqlx::query_as("SELECT * FROM games WHERE game_code = ?")
+            let existing: Option<Game> = sqlx::query_as("SELECT * FROM games WHERE game_code = $1")
                 .bind(&game_code)
                 .fetch_optional(&state.db)
                 .await?;
@@ -166,9 +166,9 @@ async fn post_game(
 
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)?
-        .as_secs();
+        .as_secs() as i64;
 
-    sqlx::query("INSERT INTO games (user_id, game_code, status, created_at, active_at, name, auto_lock, reward_message, total_reward_message, is_locked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    sqlx::query("INSERT INTO games (user_id, game_code, status, created_at, active_at, name, auto_lock, reward_message, total_reward_message, is_locked) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)")
         .bind(&user.user_id)
         .bind(&game_code)
         .bind(GAME_STATUS_ACTIVE)
@@ -182,7 +182,7 @@ async fn post_game(
         .execute(&state.db)
         .await?;
 
-    let game: Game = sqlx::query_as("SELECT * FROM games WHERE game_code = ?")
+    let game: Game = sqlx::query_as("SELECT * FROM games WHERE game_code = $1")
         .bind(&game_code)
         .fetch_one(&state.db)
         .await?;
@@ -192,8 +192,9 @@ async fn post_game(
             "INSERT INTO game_items (game_code, name, image, enabled) VALUES {}",
             game_item_templates
                 .iter()
-                .map(|_| "(?, ?, ?, ?)")
-                .collect::<Vec<&'static str>>()
+                .enumerate()
+                .map(|(idx, _)| format!("(${}, ${}, ${}, ${})", idx + 1, idx + 2, idx + 3, idx + 4))
+                .collect::<Vec<String>>()
                 .join(",")
         );
 
@@ -237,7 +238,7 @@ LEFT OUTER JOIN (
 LEFT OUTER JOIN (
 	SELECT game_code AS gp2_game_code, points
 	FROM game_players
-    WHERE user_id = ?
+    WHERE user_id = $1
 ) AS points ON points.gp2_game_code = games.game_code
 LEFT OUTER JOIN (
 	SELECT game_winners.game_code AS gw_game_code, COUNT(*) AS winners_count, MAX(points) AS winning_points
@@ -249,7 +250,7 @@ LEFT OUTER JOIN (
 	SELECT game_winners.game_code AS gw_game_code2, COUNT(*) > 0 AS is_winner
     FROM game_winners
 		INNER JOIN game_players ON game_players.game_player_id = game_winners.game_player_id
-	WHERE game_players.user_id = ?
+	WHERE game_players.user_id = $2
     GROUP BY gw_game_code2
 ) AS is_winners ON is_winners.gw_game_code2 = games.game_code
 LEFT OUTER JOIN (
@@ -264,7 +265,7 @@ LEFT OUTER JOIN (
 WHERE games.game_code IN (
 	SELECT game_code
     FROM game_players
-    WHERE user_id = ?
+    WHERE user_id = $3
 )
 ORDER BY status ASC, created_at DESC
         "#,
@@ -295,7 +296,7 @@ LEFT OUTER JOIN (
     FROM game_item_outcomes
     GROUP BY gio_game_code
 ) AS total_drops ON total_drops.gio_game_code = games.game_code
-WHERE games.user_id = ?
+WHERE games.user_id = $1
 ORDER BY status ASC, created_at DESC
         "#,
     )
@@ -383,7 +384,7 @@ async fn game(
     }
     let game_code = game_code.to_lowercase();
 
-    let game: Option<Game> = sqlx::query_as("SELECT * FROM games WHERE game_code = ? LIMIT 1")
+    let game: Option<Game> = sqlx::query_as("SELECT * FROM games WHERE game_code = $1 LIMIT 1")
         .bind(&game_code)
         .fetch_optional(&state.db)
         .await?;
@@ -400,12 +401,12 @@ FROM game_items
         SELECT item_id, COUNT(*) AS guess_count
         FROM player_guesses
         WHERE
-            game_code = ? AND
+            game_code = $1 AND
             outcome_id IS NULL
         GROUP BY item_id
     ) AS guess_counts ON guess_counts.item_id = game_items.game_item_id
 WHERE
-    game_code = ?
+    game_code = $2
             "#,
     )
     .bind(&game_code)
@@ -413,13 +414,13 @@ WHERE
     .fetch_all(&state.db)
     .await?;
 
-    let host = sqlx::query_as("SELECT * FROM users WHERE user_id = ?")
+    let host = sqlx::query_as("SELECT * FROM users WHERE user_id = $1")
         .bind(&game.user_id)
         .fetch_one(&state.db)
         .await?;
 
     let drops_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = ?")
+        sqlx::query_scalar("SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = $1")
             .bind(&game_code)
             .fetch_optional(&state.db)
             .await?
@@ -427,7 +428,7 @@ WHERE
 
     if game.status != GAME_STATUS_ACTIVE {
         let lead_points: Option<Option<i32>> =
-            sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = ?")
+            sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = $1")
                 .bind(&game_code)
                 .fetch_optional(&state.db)
                 .await?;
@@ -435,14 +436,14 @@ WHERE
 
         if game.user_id == user.user_id {
             let players_count: i64 =
-                sqlx::query_scalar("SELECT COUNT(*) FROM game_players WHERE game_code = ?")
+                sqlx::query_scalar("SELECT COUNT(*) FROM game_players WHERE game_code = $1")
                     .bind(&game_code)
                     .fetch_optional(&state.db)
                     .await?
                     .unwrap_or(0);
 
             let leaders: Vec<String> =
-        sqlx::query_scalar("SELECT users.username FROM game_players INNER JOIN users ON users.user_id = game_players.user_id WHERE game_code = ? AND points = ?")
+        sqlx::query_scalar("SELECT users.username FROM game_players INNER JOIN users ON users.user_id = game_players.user_id WHERE game_code = $1 AND points = $2")
             .bind(&game_code)
             .bind(&lead_points)
             .fetch_all(&state.db)
@@ -463,7 +464,7 @@ WHERE
         }
 
         let player: Option<GamePlayer> =
-            sqlx::query_as("SELECT * FROM game_players WHERE game_code = ? AND user_id = ?")
+            sqlx::query_as("SELECT * FROM game_players WHERE game_code = $1 AND user_id = $2")
                 .bind(&game_code)
                 .bind(&user.user_id)
                 .fetch_optional(&state.db)
@@ -502,21 +503,21 @@ WHERE
 
     if game.user_id == user.user_id {
         let lead_points: Option<Option<i32>> =
-            sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = ?")
+            sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = $1")
                 .bind(&game_code)
                 .fetch_optional(&state.db)
                 .await?;
         let lead_points = lead_points.flatten().unwrap_or(0);
 
         let players_count: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM game_players WHERE game_code = ?")
+            sqlx::query_scalar("SELECT COUNT(*) FROM game_players WHERE game_code = $1")
                 .bind(&game_code)
                 .fetch_optional(&state.db)
                 .await?
                 .unwrap_or(0);
 
         let leaders: Vec<String> =
-        sqlx::query_scalar("SELECT users.username FROM game_players INNER JOIN users ON users.user_id = game_players.user_id WHERE game_code = ? AND points = ?")
+        sqlx::query_scalar("SELECT users.username FROM game_players INNER JOIN users ON users.user_id = game_players.user_id WHERE game_code = $1 AND points = $2")
             .bind(&game_code)
             .bind(&lead_points)
             .fetch_all(&state.db)
@@ -541,14 +542,14 @@ WHERE
     }
 
     let player: Option<GamePlayer> =
-        sqlx::query_as("SELECT * FROM game_players WHERE game_code = ? AND user_id = ?")
+        sqlx::query_as("SELECT * FROM game_players WHERE game_code = $1 AND user_id = $2")
             .bind(&game_code)
             .bind(&user.user_id)
             .fetch_optional(&state.db)
             .await?;
 
     let (player, guess) = if let Some(player) = player {
-        let guess: Option<PlayerGuess> = sqlx::query_as("SELECT * FROM player_guesses WHERE game_code = ? AND player_id = ? AND outcome_id IS NULL LIMIT 1")
+        let guess: Option<PlayerGuess> = sqlx::query_as("SELECT * FROM player_guesses WHERE game_code = $1 AND player_id = $2 AND outcome_id IS NULL LIMIT 1")
             .bind(&game_code)
             .bind(&player.game_player_id)
             .fetch_optional(&state.db)
@@ -556,7 +557,7 @@ WHERE
 
         (player, guess)
     } else {
-        sqlx::query("INSERT INTO game_players (game_code, user_id, points) VALUES (?, ?, 0)")
+        sqlx::query("INSERT INTO game_players (game_code, user_id, points) VALUES ($1, $2, 0)")
             .bind(&game_code)
             .bind(&user.user_id)
             .execute(&state.db)
@@ -570,7 +571,7 @@ WHERE
 
             tokio::spawn(async move {
                 let players_count: i64 =
-                    sqlx::query_scalar("SELECT COUNT(*) FROM game_players WHERE game_code = ?")
+                    sqlx::query_scalar("SELECT COUNT(*) FROM game_players WHERE game_code = $1")
                         .bind(&game_code)
                         .fetch_optional(&db)
                         .await?
@@ -590,12 +591,12 @@ WHERE
         };
 
         let jh2 = if let Ok(now) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-            let now_s = now.as_secs();
+            let now_s = now.as_secs() as i64;
             let game_code = game_code.clone();
             let db = state.db.clone();
 
             Some(tokio::spawn(async move {
-                sqlx::query("UPDATE games SET active_at = ? WHERE game_code = ?")
+                sqlx::query("UPDATE games SET active_at = $1 WHERE game_code = $2")
                     .bind(now_s)
                     .bind(&game_code)
                     .execute(&db)
@@ -614,7 +615,7 @@ WHERE
 
             tokio::spawn(async move {
                 return Ok(sqlx::query_as(
-                    "SELECT * FROM game_players WHERE game_code = ? AND user_id = ?",
+                    "SELECT * FROM game_players WHERE game_code = $1 AND user_id = $2",
                 )
                 .bind(&game_code)
                 .bind(&user_id)
@@ -671,7 +672,7 @@ async fn game_x_board(
     }
     let game_code = game_code.to_lowercase();
 
-    let game: Option<Game> = sqlx::query_as("SELECT * FROM games WHERE game_code = ? LIMIT 1")
+    let game: Option<Game> = sqlx::query_as("SELECT * FROM games WHERE game_code = $1 LIMIT 1")
         .bind(&game_code)
         .fetch_optional(&state.db)
         .await?;
@@ -688,7 +689,7 @@ async fn game_x_board(
 
                 tokio::spawn(async move {
                     return Ok(sqlx::query_scalar(
-                        "SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = ?",
+                        "SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = $1",
                     )
                     .bind(&game_code)
                     .fetch_optional(&db)
@@ -703,7 +704,7 @@ async fn game_x_board(
 
                 tokio::spawn(async move {
                     let lead_points: Option<Option<i32>> = sqlx::query_scalar(
-                        "SELECT MAX(points) FROM game_players WHERE game_code = ?",
+                        "SELECT MAX(points) FROM game_players WHERE game_code = $1",
                     )
                     .bind(&game_code)
                     .fetch_optional(&db)
@@ -731,12 +732,12 @@ FROM game_items
         SELECT item_id, COUNT(*) AS guess_count
         FROM player_guesses
         WHERE
-            game_code = ? AND
+            game_code = $1 AND
             outcome_id IS NULL
         GROUP BY item_id
     ) AS guess_counts ON guess_counts.item_id = game_items.game_item_id
 WHERE
-    game_code = ?
+    game_code = $2
             "#,
                     )
                     .bind(&game_code)
@@ -754,7 +755,7 @@ WHERE
 
                 tokio::spawn(async move {
                     return Ok(sqlx::query_scalar(
-                        "SELECT COUNT(*) FROM game_players WHERE game_code = ?",
+                        "SELECT COUNT(*) FROM game_players WHERE game_code = $1",
                     )
                     .bind(&game_code)
                     .fetch_optional(&db)
@@ -769,7 +770,7 @@ WHERE
 
                 tokio::spawn(async move {
                     let leaders: Vec<String> =
-                    sqlx::query_scalar("SELECT users.username FROM game_players INNER JOIN users ON users.user_id = game_players.user_id WHERE game_code = ? AND points = ?")
+                    sqlx::query_scalar("SELECT users.username FROM game_players INNER JOIN users ON users.user_id = game_players.user_id WHERE game_code = $1 AND points = $2")
                         .bind(&game_code)
                         .bind(&lead_points)
                         .fetch_all(&db)
@@ -799,7 +800,7 @@ WHERE
     }
 
     let game_player: Option<GamePlayer> =
-        sqlx::query_as("SELECT * FROM game_players WHERE game_code = ? AND user_id = ? LIMIT 1")
+        sqlx::query_as("SELECT * FROM game_players WHERE game_code = $1 AND user_id = $2 LIMIT 1")
             .bind(&game_code)
             .bind(&user.user_id)
             .fetch_optional(&state.db)
@@ -816,7 +817,7 @@ WHERE
             let db = state.db.clone();
 
             tokio::spawn(async move {
-                return Ok(sqlx::query_as("SELECT * FROM player_guesses WHERE game_code = ? AND player_id = ? AND outcome_id IS NULL LIMIT 1")
+                return Ok(sqlx::query_as("SELECT * FROM player_guesses WHERE game_code = $1 AND player_id = $2 AND outcome_id IS NULL LIMIT 1")
                         .bind(&game_code)
                         .bind(&game_player_id)
                         .fetch_optional(&db)
@@ -830,7 +831,7 @@ WHERE
 
             tokio::spawn(async move {
                 return Ok(
-                    sqlx::query_as("SELECT * FROM game_items WHERE game_code = ?")
+                    sqlx::query_as("SELECT * FROM game_items WHERE game_code = $1")
                         .bind(&game_code)
                         .fetch_all(&db)
                         .await?,
@@ -843,7 +844,7 @@ WHERE
             let db = state.db.clone();
 
             tokio::spawn(async move {
-                let host: User = sqlx::query_as("SELECT * FROM users WHERE user_id = ?")
+                let host: User = sqlx::query_as("SELECT * FROM users WHERE user_id = $1")
                     .bind(&user_id)
                     .fetch_one(&db)
                     .await?;
@@ -857,7 +858,7 @@ WHERE
 
             tokio::spawn(async move {
                 return Ok(sqlx::query_scalar(
-                    "SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = ?",
+                    "SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = $1",
                 )
                 .bind(&game_code)
                 .fetch_optional(&db)
@@ -910,7 +911,7 @@ async fn game_x_lock(
     let game_code = game_code.to_lowercase();
 
     let game: Option<Game> = sqlx::query_as(
-        "SELECT * FROM games WHERE game_code = ? AND user_id = ? AND status = 'ACTIVE' LIMIT 1",
+        "SELECT * FROM games WHERE game_code = $1 AND user_id = $2 AND status = 'ACTIVE' LIMIT 1",
     )
     .bind(&game_code)
     .bind(&user.user_id)
@@ -922,7 +923,7 @@ async fn game_x_lock(
     };
 
     if !game.is_locked {
-        sqlx::query("UPDATE games SET is_locked = true WHERE game_code = ?")
+        sqlx::query("UPDATE games SET is_locked = true WHERE game_code = $1")
             .bind(&game_code)
             .execute(&state.db)
             .await?;
@@ -946,12 +947,12 @@ FROM game_items
         SELECT item_id, COUNT(*) AS guess_count
         FROM player_guesses
         WHERE
-            game_code = ? AND
+            game_code = $1 AND
             outcome_id IS NULL
         GROUP BY item_id
     ) AS guess_counts ON guess_counts.item_id = game_items.game_item_id
 WHERE
-    game_code = ?
+    game_code = $2
             "#,
     )
     .bind(&game_code)
@@ -960,28 +961,28 @@ WHERE
     .await?;
 
     let players_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM game_players WHERE game_code = ?")
+        sqlx::query_scalar("SELECT COUNT(*) FROM game_players WHERE game_code = $1")
             .bind(&game_code)
             .fetch_optional(&state.db)
             .await?
             .unwrap_or(0);
 
     let drops_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = ?")
+        sqlx::query_scalar("SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = $1")
             .bind(&game_code)
             .fetch_optional(&state.db)
             .await?
             .unwrap_or(0);
 
     let lead_points: Option<Option<i32>> =
-        sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = ?")
+        sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = $1")
             .bind(&game_code)
             .fetch_optional(&state.db)
             .await?;
     let lead_points = lead_points.flatten().unwrap_or(0);
 
     let leaders: Vec<String> =
-        sqlx::query_scalar("SELECT users.username FROM game_players INNER JOIN users ON users.user_id = game_players.user_id WHERE game_code = ? AND points = ?")
+        sqlx::query_scalar("SELECT users.username FROM game_players INNER JOIN users ON users.user_id = game_players.user_id WHERE game_code = $1 AND points = $2")
             .bind(&game_code)
             .bind(&lead_points)
             .fetch_all(&state.db)
@@ -1017,7 +1018,7 @@ async fn game_x_unlock(
     let game_code = game_code.to_lowercase();
 
     let game: Option<Game> = sqlx::query_as(
-        "SELECT * FROM games WHERE game_code = ? AND user_id = ? AND status = 'ACTIVE' LIMIT 1",
+        "SELECT * FROM games WHERE game_code = $1 AND user_id = $2 AND status = 'ACTIVE' LIMIT 1",
     )
     .bind(&game_code)
     .bind(&user.user_id)
@@ -1029,7 +1030,7 @@ async fn game_x_unlock(
     };
 
     if game.is_locked {
-        sqlx::query("UPDATE games SET is_locked = false WHERE game_code = ?")
+        sqlx::query("UPDATE games SET is_locked = false WHERE game_code = $1")
             .bind(&game_code)
             .execute(&state.db)
             .await?;
@@ -1053,12 +1054,12 @@ FROM game_items
         SELECT item_id, COUNT(*) AS guess_count
         FROM player_guesses
         WHERE
-            game_code = ? AND
+            game_code = $1 AND
             outcome_id IS NULL
         GROUP BY item_id
     ) AS guess_counts ON guess_counts.item_id = game_items.game_item_id
 WHERE
-    game_code = ?
+    game_code = $2
             "#,
     )
     .bind(&game_code)
@@ -1067,28 +1068,28 @@ WHERE
     .await?;
 
     let players_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM game_players WHERE game_code = ?")
+        sqlx::query_scalar("SELECT COUNT(*) FROM game_players WHERE game_code = $1")
             .bind(&game_code)
             .fetch_optional(&state.db)
             .await?
             .unwrap_or(0);
 
     let drops_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = ?")
+        sqlx::query_scalar("SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = $1")
             .bind(&game_code)
             .fetch_optional(&state.db)
             .await?
             .unwrap_or(0);
 
     let lead_points: Option<Option<i32>> =
-        sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = ?")
+        sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = $1")
             .bind(&game_code)
             .fetch_optional(&state.db)
             .await?;
     let lead_points = lead_points.flatten().unwrap_or(0);
 
     let leaders: Vec<String> =
-        sqlx::query_scalar("SELECT users.username FROM game_players INNER JOIN users ON users.user_id = game_players.user_id WHERE game_code = ? AND points = ?")
+        sqlx::query_scalar("SELECT users.username FROM game_players INNER JOIN users ON users.user_id = game_players.user_id WHERE game_code = $1 AND points = $2")
             .bind(&game_code)
             .bind(&lead_points)
             .fetch_all(&state.db)
@@ -1115,6 +1116,7 @@ async fn game_x_choose_item(
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Response> {
+    let game_item_id = game_item_id as i64;
     let session_id = utils::session_id(&session)?;
     let (user, _) = utils::require_user(&state, &session_id).await?.split();
 
@@ -1124,7 +1126,7 @@ async fn game_x_choose_item(
     let game_code = game_code.to_lowercase();
 
     let game: Option<Game> = sqlx::query_as(
-        "SELECT * FROM games WHERE game_code = ? AND user_id = ? AND status = 'ACTIVE' LIMIT 1",
+        "SELECT * FROM games WHERE game_code = $1 AND user_id = $2 AND status = 'ACTIVE' LIMIT 1",
     )
     .bind(&game_code)
     .bind(&user.user_id)
@@ -1135,12 +1137,13 @@ async fn game_x_choose_item(
         return Err(anyhow::anyhow!("Game not found"))?;
     };
 
-    let game_item: Option<GameItem> =
-        sqlx::query_as("SELECT * FROM game_items WHERE game_code = ? AND game_item_id = ? LIMIT 1")
-            .bind(&game_code)
-            .bind(&game_item_id)
-            .fetch_optional(&state.db)
-            .await?;
+    let game_item: Option<GameItem> = sqlx::query_as(
+        "SELECT * FROM game_items WHERE game_code = $1 AND game_item_id = $2 LIMIT 1",
+    )
+    .bind(&game_code)
+    .bind(&game_item_id)
+    .fetch_optional(&state.db)
+    .await?;
 
     let Some(game_item) = game_item else {
         return Err(anyhow::anyhow!("Item not found"))?;
@@ -1150,20 +1153,20 @@ async fn game_x_choose_item(
         return Err(anyhow::anyhow!("Item is disabled"))?;
     }
 
-    sqlx::query("INSERT INTO game_item_outcomes (game_code, item_id) VALUES (?, ?)")
+    sqlx::query("INSERT INTO game_item_outcomes (game_code, item_id) VALUES ($1, $2)")
         .bind(&game_code)
         .bind(&game_item_id)
         .execute(&state.db)
         .await?;
 
     let outcome: GameItemOutcome = sqlx::query_as(
-        "SELECT * FROM game_item_outcomes WHERE item_id = ? ORDER BY outcome_id DESC LIMIT 1",
+        "SELECT * FROM game_item_outcomes WHERE item_id = $1 ORDER BY outcome_id DESC LIMIT 1",
     )
     .bind(&game_item_id)
     .fetch_one(&state.db)
     .await?;
 
-    let correct_guesses: Vec<(u64, String, String)> = sqlx::query_as(
+    let correct_guesses: Vec<(i64, String, String)> = sqlx::query_as(
         "
 SELECT game_players.game_player_id, users.username, game_items.name
 FROM player_guesses
@@ -1171,8 +1174,8 @@ INNER JOIN game_players ON player_guesses.player_id = game_players.game_player_i
 INNER JOIN users ON game_players.user_id = users.user_id
 INNER JOIN game_items ON player_guesses.item_id = game_items.game_item_id
 WHERE
-    player_guesses.game_code = ? AND
-    player_guesses.item_id = ? AND
+    player_guesses.game_code = $1 AND
+    player_guesses.item_id = $2 AND
     player_guesses.outcome_id IS NULL
 ",
     )
@@ -1182,13 +1185,14 @@ WHERE
     .await?;
 
     if !correct_guesses.is_empty() {
-        let correct_guess_ids: HashSet<u64> = correct_guesses.iter().map(|x| x.0).collect();
+        let correct_guess_ids: HashSet<i64> = correct_guesses.iter().map(|x| x.0).collect();
 
         let q = format!(
             "UPDATE game_players SET points = points + 1 WHERE game_player_id IN ({})",
             correct_guess_ids
                 .iter()
-                .map(|_| "?")
+                .enumerate()
+                .map(|(idx, _)| format!("${}", idx + 1))
                 .collect::<Vec<_>>()
                 .join(", ")
         );
@@ -1215,7 +1219,8 @@ WHERE
 
             let values = messages
                 .iter()
-                .map(|_| "(?, ?, NULL, false)")
+                .enumerate()
+                .map(|(idx, _)| format!("(${}, ${}, NULL, false)", idx + 1, idx + 2))
                 .collect::<Vec<_>>()
                 .join(", ");
 
@@ -1234,21 +1239,21 @@ WHERE
     }
 
     sqlx::query(
-        "UPDATE player_guesses SET outcome_id = ? WHERE game_code = ? AND outcome_id IS NULL",
+        "UPDATE player_guesses SET outcome_id = $1 WHERE game_code = $2 AND outcome_id IS NULL",
     )
     .bind(&outcome.outcome_id)
     .bind(&game_code)
     .execute(&state.db)
     .await?;
 
-    sqlx::query("UPDATE game_items SET enabled = false WHERE game_code = ? AND game_item_id = ?")
+    sqlx::query("UPDATE game_items SET enabled = false WHERE game_code = $1 AND game_item_id = $2")
         .bind(&game_code)
         .bind(&game_item_id)
         .execute(&state.db)
         .await?;
 
     if game.is_locked != game.auto_lock {
-        sqlx::query("UPDATE games SET is_locked = ? WHERE game_code = ?")
+        sqlx::query("UPDATE games SET is_locked = $1 WHERE game_code = $2")
             .bind(&game.auto_lock)
             .bind(&game_code)
             .execute(&state.db)
@@ -1262,7 +1267,7 @@ WHERE
         .publish(HostAction {
             game_code: game_code.clone(),
             typ: HostActionType::Choose {
-                item_id: game_item_id.clone(),
+                item_id: game_item_id.clone() as u64,
             },
         })
         .await?;
@@ -1275,12 +1280,12 @@ FROM game_items
         SELECT item_id, COUNT(*) AS guess_count
         FROM player_guesses
         WHERE
-            game_code = ? AND
+            game_code = $1 AND
             outcome_id IS NULL
         GROUP BY item_id
     ) AS guess_counts ON guess_counts.item_id = game_items.game_item_id
 WHERE
-    game_code = ?
+    game_code = $2
             "#,
     )
     .bind(&game_code)
@@ -1289,28 +1294,28 @@ WHERE
     .await?;
 
     let players_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM game_players WHERE game_code = ?")
+        sqlx::query_scalar("SELECT COUNT(*) FROM game_players WHERE game_code = $1")
             .bind(&game_code)
             .fetch_optional(&state.db)
             .await?
             .unwrap_or(0);
 
     let drops_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = ?")
+        sqlx::query_scalar("SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = $1")
             .bind(&game_code)
             .fetch_optional(&state.db)
             .await?
             .unwrap_or(0);
 
     let lead_points: Option<Option<i32>> =
-        sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = ?")
+        sqlx::query_scalar("SELECT MAX(points) FROM game_players WHERE game_code = $1")
             .bind(&game_code)
             .fetch_optional(&state.db)
             .await?;
     let lead_points = lead_points.flatten().unwrap_or(0);
 
     let leaders: Vec<String> =
-        sqlx::query_scalar("SELECT users.username FROM game_players INNER JOIN users ON users.user_id = game_players.user_id WHERE game_code = ? AND points = ?")
+        sqlx::query_scalar("SELECT users.username FROM game_players INNER JOIN users ON users.user_id = game_players.user_id WHERE game_code = $1 AND points = $2")
             .bind(&game_code)
             .bind(&lead_points)
             .fetch_all(&state.db)
@@ -1349,6 +1354,7 @@ async fn game_x_guess_item(
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Response> {
+    let game_item_id = game_item_id as i64;
     let session_id = utils::session_id(&session)?;
     let (user, _) = utils::require_user(&state, &session_id).await?.split();
 
@@ -1358,7 +1364,7 @@ async fn game_x_guess_item(
     let game_code = game_code.to_lowercase();
 
     let game: Option<Game> = sqlx::query_as(
-        "SELECT * FROM games WHERE game_code = ? AND user_id != ? AND status = 'ACTIVE' LIMIT 1",
+        "SELECT * FROM games WHERE game_code = $1 AND user_id != $2 AND status = 'ACTIVE' LIMIT 1",
     )
     .bind(&game_code)
     .bind(&user.user_id)
@@ -1369,19 +1375,20 @@ async fn game_x_guess_item(
         return Err(anyhow::anyhow!("Game not found"))?;
     };
 
-    let game_item: Option<GameItem> =
-        sqlx::query_as("SELECT * FROM game_items WHERE game_code = ? AND game_item_id = ? LIMIT 1")
-            .bind(&game_code)
-            .bind(&game_item_id)
-            .fetch_optional(&state.db)
-            .await?;
+    let game_item: Option<GameItem> = sqlx::query_as(
+        "SELECT * FROM game_items WHERE game_code = $1 AND game_item_id = $2 LIMIT 1",
+    )
+    .bind(&game_code)
+    .bind(&game_item_id)
+    .fetch_optional(&state.db)
+    .await?;
 
     let Some(game_item) = game_item else {
         return Err(anyhow::anyhow!("Item not found"))?;
     };
 
     let game_player: Option<GamePlayer> =
-        sqlx::query_as("SELECT * FROM game_players WHERE game_code = ? AND user_id = ? LIMIT 1")
+        sqlx::query_as("SELECT * FROM game_players WHERE game_code = $1 AND user_id = $2 LIMIT 1")
             .bind(&game_code)
             .bind(&user.user_id)
             .fetch_optional(&state.db)
@@ -1391,28 +1398,28 @@ async fn game_x_guess_item(
         return Err(anyhow::anyhow!("Player not found"))?;
     };
 
-    let guess: Option<PlayerGuess> = sqlx::query_as("SELECT * FROM player_guesses WHERE game_code = ? AND player_id = ? AND outcome_id IS NULL LIMIT 1")
+    let guess: Option<PlayerGuess> = sqlx::query_as("SELECT * FROM player_guesses WHERE game_code = $1 AND player_id = $2 AND outcome_id IS NULL LIMIT 1")
         .bind(&game_code)
         .bind(&game_player.game_player_id)
         .fetch_optional(&state.db)
         .await?;
 
     let guess = if let Some(mut guess) = guess {
-        sqlx::query("UPDATE player_guesses SET item_id = ? WHERE game_code = ? AND player_id = ? AND outcome_id IS NULL LIMIT 1")
+        sqlx::query("UPDATE player_guesses SET item_id = $1 WHERE game_code = $2 AND player_id = $3 AND outcome_id IS NULL LIMIT 1")
             .bind(&game_item.game_item_id)
             .bind(&game_code)
             .bind(&game_player.game_player_id)
             .execute(&state.db)
             .await?;
 
-        let from_new_guess_count = sqlx::query_scalar("SELECT COUNT(*) FROM player_guesses WHERE game_code = ? AND item_id = ? AND outcome_id IS NULL")
+        let from_new_guess_count = sqlx::query_scalar("SELECT COUNT(*) FROM player_guesses WHERE game_code = $1 AND item_id = $2 AND outcome_id IS NULL")
             .bind(&game_code)
             .bind(&guess.item_id)
             .fetch_optional(&state.db)
             .await?
             .unwrap_or(0);
 
-        let to_new_guess_count = sqlx::query_scalar("SELECT COUNT(*) FROM player_guesses WHERE game_code = ? AND item_id = ? AND outcome_id IS NULL")
+        let to_new_guess_count = sqlx::query_scalar("SELECT COUNT(*) FROM player_guesses WHERE game_code = $1 AND item_id = $2 AND outcome_id IS NULL")
             .bind(&game_code)
             .bind(&game_item.game_item_id)
             .fetch_optional(&state.db)
@@ -1426,7 +1433,7 @@ async fn game_x_guess_item(
                 game_code: game_code.clone(),
                 user_id: user.user_id.clone(),
                 typ: PlayerActionType::UndoGuess {
-                    item_id: guess.item_id.clone(),
+                    item_id: guess.item_id.clone() as u64,
                     new_guess_count: from_new_guess_count,
                 },
             })
@@ -1439,7 +1446,7 @@ async fn game_x_guess_item(
                 game_code: game_code.clone(),
                 user_id: user.user_id.clone(),
                 typ: PlayerActionType::Guess {
-                    item_id: game_item.game_item_id.clone(),
+                    item_id: game_item.game_item_id.clone() as u64,
                     new_guess_count: to_new_guess_count,
                 },
             })
@@ -1449,15 +1456,15 @@ async fn game_x_guess_item(
 
         guess
     } else {
-        sqlx::query("INSERT INTO player_guesses (game_code, player_id, item_id, outcome_id) VALUES (?, ?, ?, ?)")
+        sqlx::query("INSERT INTO player_guesses (game_code, player_id, item_id, outcome_id) VALUES ($1, $2, $3, $4)")
             .bind(&game_code)
             .bind(&game_player.game_player_id)
             .bind(&game_item.game_item_id)
-            .bind(None as Option<u64>)
+            .bind(None as Option<i64>)
             .execute(&state.db)
             .await?;
 
-        let new_guess_count = sqlx::query_scalar("SELECT COUNT(*) FROM player_guesses WHERE game_code = ? AND item_id = ? AND outcome_id IS NULL")
+        let new_guess_count = sqlx::query_scalar("SELECT COUNT(*) FROM player_guesses WHERE game_code = $1 AND item_id = $2 AND outcome_id IS NULL")
             .bind(&game_code)
             .bind(&game_item.game_item_id)
             .fetch_optional(&state.db)
@@ -1471,7 +1478,7 @@ async fn game_x_guess_item(
                 game_code: game_code.clone(),
                 user_id: user.user_id.clone(),
                 typ: PlayerActionType::Guess {
-                    item_id: game_item.game_item_id.clone(),
+                    item_id: game_item.game_item_id.clone() as u64,
                     new_guess_count,
                 },
             })
@@ -1489,7 +1496,7 @@ async fn game_x_guess_item(
                 .await?;
         }
 
-        let guess: PlayerGuess = sqlx::query_as("SELECT * FROM player_guesses WHERE game_code = ? AND player_id = ? AND item_id = ? AND outcome_id IS NULL LIMIT 1")
+        let guess: PlayerGuess = sqlx::query_as("SELECT * FROM player_guesses WHERE game_code = $1 AND player_id = $2 AND item_id = $3 AND outcome_id IS NULL LIMIT 1")
             .bind(&game_code)
             .bind(&game_player.game_player_id)
             .bind(&game_item.game_item_id)
@@ -1499,18 +1506,18 @@ async fn game_x_guess_item(
         guess
     };
 
-    let items = sqlx::query_as("SELECT * FROM game_items WHERE game_code = ?")
+    let items = sqlx::query_as("SELECT * FROM game_items WHERE game_code = $1")
         .bind(&game_code)
         .fetch_all(&state.db)
         .await?;
 
-    let host = sqlx::query_as("SELECT * FROM users WHERE user_id = ?")
+    let host = sqlx::query_as("SELECT * FROM users WHERE user_id = $1")
         .bind(&game.user_id)
         .fetch_one(&state.db)
         .await?;
 
     let drops_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = ?")
+        sqlx::query_scalar("SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = $1")
             .bind(&game_code)
             .fetch_optional(&state.db)
             .await?
@@ -1542,7 +1549,7 @@ async fn game_x_clear_guesses(
     let game_code = game_code.to_lowercase();
 
     let game: Option<Game> = sqlx::query_as(
-        "SELECT * FROM games WHERE game_code = ? AND user_id = ? AND status = 'ACTIVE' LIMIT 1",
+        "SELECT * FROM games WHERE game_code = $1 AND user_id = $2 AND status = 'ACTIVE' LIMIT 1",
     )
     .bind(&game_code)
     .bind(&user.user_id)
@@ -1553,7 +1560,7 @@ async fn game_x_clear_guesses(
         return Err(anyhow::anyhow!("Game not found"))?;
     };
 
-    sqlx::query("DELETE FROM player_guesses WHERE game_code = ? AND outcome_id IS NULL")
+    sqlx::query("DELETE FROM player_guesses WHERE game_code = $1 AND outcome_id IS NULL")
         .bind(&game_code)
         .execute(&state.db)
         .await?;
@@ -1583,6 +1590,7 @@ async fn game_x_enable_item(
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Response> {
+    let game_item_id = game_item_id as i64;
     let session_id = utils::session_id(&session)?;
     let (user, _) = utils::require_user(&state, &session_id).await?.split();
 
@@ -1592,7 +1600,7 @@ async fn game_x_enable_item(
     let game_code = game_code.to_lowercase();
 
     let game: Option<Game> = sqlx::query_as(
-        "SELECT * FROM games WHERE game_code = ? AND user_id = ? AND status = 'ACTIVE' LIMIT 1",
+        "SELECT * FROM games WHERE game_code = $1 AND user_id = $2 AND status = 'ACTIVE' LIMIT 1",
     )
     .bind(&game_code)
     .bind(&user.user_id)
@@ -1611,14 +1619,14 @@ FROM game_items
         SELECT item_id, COUNT(*) AS guess_count
         FROM player_guesses
         WHERE
-            game_code = ? AND
+            game_code = $1 AND
             outcome_id IS NULL
         GROUP BY item_id
-        HAVING item_id = ?
+        HAVING item_id = $2
     ) AS guess_counts ON guess_counts.item_id = game_items.game_item_id
 WHERE
-    game_code = ? AND
-    game_item_id = ?
+    game_code = $3 AND
+    game_item_id = $4
 LIMIT 1
             "#,
     )
@@ -1635,7 +1643,7 @@ LIMIT 1
 
     if !game_item.enabled {
         sqlx::query(
-            "UPDATE game_items SET enabled = true WHERE game_code = ? AND game_item_id = ?",
+            "UPDATE game_items SET enabled = true WHERE game_code = $1 AND game_item_id = $2",
         )
         .bind(&game_code)
         .bind(&game_item_id)
@@ -1650,7 +1658,7 @@ LIMIT 1
             .publish(HostAction {
                 game_code: game_code.clone(),
                 typ: HostActionType::Enable {
-                    item_id: game_item_id.clone(),
+                    item_id: game_item_id.clone() as u64,
                 },
             })
             .await?;
@@ -1669,6 +1677,7 @@ async fn game_x_disable_item(
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Response> {
+    let game_item_id = game_item_id as i64;
     let session_id = utils::session_id(&session)?;
     let (user, _) = utils::require_user(&state, &session_id).await?.split();
 
@@ -1678,7 +1687,7 @@ async fn game_x_disable_item(
     let game_code = game_code.to_lowercase();
 
     let game: Option<Game> = sqlx::query_as(
-        "SELECT * FROM games WHERE game_code = ? AND user_id = ? AND status = 'ACTIVE' LIMIT 1",
+        "SELECT * FROM games WHERE game_code = $1 AND user_id = $2 AND status = 'ACTIVE' LIMIT 1",
     )
     .bind(&game_code)
     .bind(&user.user_id)
@@ -1697,14 +1706,14 @@ FROM game_items
         SELECT item_id, COUNT(*) AS guess_count
         FROM player_guesses
         WHERE
-            game_code = ? AND
+            game_code = $1 AND
             outcome_id IS NULL
         GROUP BY item_id
-        HAVING item_id = ?
+        HAVING item_id = $2
     ) AS guess_counts ON guess_counts.item_id = game_items.game_item_id
 WHERE
-    game_code = ? AND
-    game_item_id = ?
+    game_code = $3 AND
+    game_item_id = $4
 LIMIT 1
             "#,
     )
@@ -1721,7 +1730,7 @@ LIMIT 1
 
     if game_item.enabled {
         sqlx::query(
-            "UPDATE game_items SET enabled = false WHERE game_code = ? AND game_item_id = ?",
+            "UPDATE game_items SET enabled = false WHERE game_code = $1 AND game_item_id = $2",
         )
         .bind(&game_code)
         .bind(&game_item_id)
@@ -1736,7 +1745,7 @@ LIMIT 1
             .publish(HostAction {
                 game_code: game_code.clone(),
                 typ: HostActionType::Disable {
-                    item_id: game_item_id.clone(),
+                    item_id: game_item_id.clone() as u64,
                 },
             })
             .await?;
@@ -1764,7 +1773,7 @@ async fn finish_game(
     let game_code = game_code.to_lowercase();
 
     let game: Option<Game> = sqlx::query_as(
-        "SELECT * FROM games WHERE game_code = ? AND user_id = ? AND status = ? LIMIT 1",
+        "SELECT * FROM games WHERE game_code = $1 AND user_id = $2 AND status = $3 LIMIT 1",
     )
     .bind(&game_code)
     .bind(&user.user_id)
@@ -1780,25 +1789,25 @@ async fn finish_game(
         return Err(anyhow::anyhow!("Game is not active"))?;
     }
 
-    sqlx::query("UPDATE games SET status = ? WHERE game_code = ?")
+    sqlx::query("UPDATE games SET status = $1 WHERE game_code = $2")
         .bind(GAME_STATUS_FINISHED)
         .bind(&game.game_code)
         .execute(&state.db)
         .await?;
     game.status = GAME_STATUS_FINISHED.to_string();
 
-    let winners: Vec<(u64, i32, String)> = sqlx::query_as(
+    let winners: Vec<(i64, i32, String)> = sqlx::query_as(
         r#"
 SELECT game_players.game_player_id, game_players.points, users.username
 FROM game_players
     INNER JOIN users ON users.user_id = game_players.user_id
 WHERE
-    game_players.game_code = ? AND
+    game_players.game_code = $1 AND
     points != 0 AND
     points = (
         SELECT MAX(points)
         FROM game_players
-        WHERE game_players.game_code = ?
+        WHERE game_players.game_code = $2
     )
 "#,
     )
@@ -1810,7 +1819,8 @@ WHERE
     if !winners.is_empty() {
         let values = winners
             .iter()
-            .map(|_| "(?, ?)")
+            .enumerate()
+            .map(|(idx, _)| format!("(${}, ${})", idx + 1, idx + 2))
             .collect::<Vec<_>>()
             .join(", ");
 
@@ -1825,7 +1835,7 @@ WHERE
 
         if let Some(template_message) = &game.total_reward_message {
             let total: i64 =
-                sqlx::query_scalar("SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = ?")
+                sqlx::query_scalar("SELECT COUNT(*) FROM game_item_outcomes WHERE game_code = $1")
                     .bind(&game_code)
                     .fetch_optional(&state.db)
                     .await?
@@ -1845,7 +1855,8 @@ WHERE
 
             let values = messages
                 .iter()
-                .map(|_| "(?, ?, NULL, false)")
+                .enumerate()
+                .map(|(idx, _)| format!("(${}, ${}, NULL, false)", idx + 1, idx + 2))
                 .collect::<Vec<_>>()
                 .join(", ");
 
@@ -1905,7 +1916,7 @@ async fn host_sse(
     let game_code = game_code.to_lowercase();
 
     let game: Option<Game> = sqlx::query_as(
-        "SELECT * FROM games WHERE game_code = ? AND user_id = ? AND status = ? LIMIT 1",
+        "SELECT * FROM games WHERE game_code = $1 AND user_id = $2 AND status = $3 LIMIT 1",
     )
     .bind(&game_code)
     .bind(&user.user_id)
@@ -2019,7 +2030,7 @@ async fn player_sse(
     let game_code = game_code.to_lowercase();
 
     let game: Option<Game> = sqlx::query_as(
-        "SELECT * FROM games WHERE game_code = ? AND user_id != ? AND status = ? LIMIT 1",
+        "SELECT * FROM games WHERE game_code = $1 AND user_id != $2 AND status = $3 LIMIT 1",
     )
     .bind(&game_code)
     .bind(&user.user_id)
@@ -2036,7 +2047,7 @@ async fn player_sse(
     }
 
     let game_player: Option<GamePlayer> =
-        sqlx::query_as("SELECT * FROM game_players WHERE game_code = ? AND user_id = ? LIMIT 1")
+        sqlx::query_as("SELECT * FROM game_players WHERE game_code = $1 AND user_id = $2 LIMIT 1")
             .bind(&game_code)
             .bind(&user.user_id)
             .fetch_optional(&state.db)

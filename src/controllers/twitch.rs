@@ -69,7 +69,7 @@ async fn twitch_connect(
     let redirect = params.0.redirect.unwrap_or("/".to_string());
 
     sqlx::query(
-        "INSERT INTO csrf_tokens (sid, token, expiry, redirect, with_chat) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO csrf_tokens (sid, token, expiry, redirect, with_chat) VALUES ($1, $2, $3, $4, $5)",
     )
     .bind(&session_id)
     .bind(csrf_token.secret())
@@ -123,7 +123,7 @@ async fn twitch_callback(
 
     let sid = utils::session_id(&session)?;
 
-    let csrf_token: Option<CsrfToken> = sqlx::query_as("SELECT * FROM csrf_tokens WHERE sid = ?")
+    let csrf_token: Option<CsrfToken> = sqlx::query_as("SELECT * FROM csrf_tokens WHERE sid = $1")
         .bind(&sid)
         .fetch_optional(&state.db)
         .await?;
@@ -142,8 +142,8 @@ async fn twitch_callback(
         }
     }
 
-    sqlx::query("DELETE FROM csrf_tokens WHERE id = ?")
-        .bind(&csrf_token.id)
+    sqlx::query("DELETE FROM csrf_tokens WHERE id = $1")
+        .bind(&(csrf_token.id as i64))
         .execute(&state.db)
         .await?;
 
@@ -205,26 +205,26 @@ async fn twitch_callback(
 
     let expiry_s = now_s + token.expires_in().as_secs();
 
-    sqlx::query("DELETE FROM session_auths WHERE sid = ?")
+    sqlx::query("DELETE FROM session_auths WHERE sid = $1")
         .bind(&sid)
         .execute(&state.db)
         .await?;
 
-    sqlx::query("INSERT IGNORE INTO users (user_id, username, twitch_login) VALUES (?, ?, ?)")
+    sqlx::query("INSERT IGNORE INTO users (user_id, username, twitch_login) VALUES ($1, $2, $3)")
         .bind(token.user_id.as_str())
         .bind(username)
         .bind(token.login.as_str())
         .execute(&state.db)
         .await?;
 
-    sqlx::query("INSERT INTO session_auths (sid, user_id, client_id, access_token, refresh_token, created_at, expiry, can_chat) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+    sqlx::query("INSERT INTO session_auths (sid, user_id, client_id, access_token, refresh_token, created_at, expiry, can_chat) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
         .bind(&sid)
         .bind(token.user_id.as_str())
         .bind(state.cfg.twitch_client_id.as_str())
         .bind(&token.access_token.secret())
         .bind(&token.refresh_token.as_ref().map(|t| t.secret()).unwrap_or_default())
-        .bind(now_s)
-        .bind(expiry_s)
+        .bind(now_s as i64)
+        .bind(expiry_s as i64)
         .bind(csrf_token.with_chat)
         .execute(&state.db)
         .await?;
@@ -237,7 +237,7 @@ async fn twitch_callback(
 async fn logout(session: Session, State(state): State<AppState>) -> Result<impl IntoResponse> {
     let sid = session.id().0.to_string();
 
-    sqlx::query("DELETE FROM session_auths WHERE sid = ?")
+    sqlx::query("DELETE FROM session_auths WHERE sid = $1")
         .bind(&sid)
         .execute(&state.db)
         .await?;

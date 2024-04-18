@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS csrf_tokens (
 	id SERIAL PRIMARY KEY,
 	sid VARCHAR(128) NOT NULL,
 	token VARCHAR(1024) NOT NULL,
-	expiry BIGINT UNSIGNED,
+	expiry BIGINT,
 	redirect VARCHAR(1024),
 	with_chat BOOLEAN NOT NULL
 );
