@@ -19,9 +19,9 @@ pub async fn init_session_store(
         r#"
             create table if not exists "{schema_name}"."{table_name}"
             (
-                id char(36) primary key not null,
+                id text primary key not null,
                 data bytea not null,
-                expiry_date timestamp(6) not null
+                expiry_date timestamptz not null
             )
             "#,
         schema_name = db_session_store.schema_name,
