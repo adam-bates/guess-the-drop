@@ -210,7 +210,7 @@ async fn twitch_callback(
         .execute(&state.db)
         .await?;
 
-    sqlx::query("INSERT IGNORE INTO users (user_id, username, twitch_login) VALUES ($1, $2, $3)")
+    sqlx::query("INSERT INTO users (user_id, username, twitch_login) VALUES ($1, $2, $3) ON CONFLICT (user_id) DO UPDATE SET username=EXCLUDED.username, twitch_login=EXCLUDED.twitch_login")
         .bind(token.user_id.as_str())
         .bind(username)
         .bind(token.login.as_str())
