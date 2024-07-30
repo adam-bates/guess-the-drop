@@ -3,7 +3,7 @@ use sqlx;
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Clone)]
 pub struct CsrfToken {
-    pub id: i64,
+    pub id: i32,
     pub sid: String,
     pub token: String,
     pub expiry: Option<i64>,

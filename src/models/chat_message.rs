@@ -3,7 +3,7 @@ use sqlx;
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Debug, Clone)]
 pub struct ChatMessage {
-    pub id: i64,
+    pub id: i32,
     pub game_code: String,
     pub message: String,
     pub lock_id: Option<String>,

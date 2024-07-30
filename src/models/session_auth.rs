@@ -5,7 +5,7 @@ use sqlx;
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Clone, Debug)]
 pub struct SessionAuth {
-    pub id: i64,
+    pub id: i32,
     pub sid: String,
     pub user_id: String,
     pub access_token: String,
@@ -17,7 +17,7 @@ pub struct SessionAuth {
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Clone, Debug)]
 pub struct SessionAuthWithUser {
-    pub id: i64,
+    pub id: i32,
     pub sid: String,
     pub user_id: String,
     pub access_token: String,
